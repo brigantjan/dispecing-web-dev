@@ -902,7 +902,18 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 // ════════════════════════════════════════════════════════════
 // API KONFIGURÁCIA
 // ════════════════════════════════════════════════════════════
-const API_URL='https://dispecing-api.onrender.com';
+// API_URL sa volí dynamicky podľa toho, kde frontend beží.
+// Tým sa zabráni omylom keď sa skopíruje DEV súbor do PROD repa alebo naopak.
+//   – frontend na *.dispecing-web-dev/* alebo localhost → DEV backend (DEV DB)
+//   – frontend na ostatných hostoch (PROD GitHub Pages, vlastná doména) → PROD backend
+const API_URL = (() => {
+  const h = window.location.hostname + window.location.pathname;
+  if (h.includes('dispecing-web-dev') || h.includes('localhost') || h.includes('127.0.0.1')) {
+    return 'https://dispecing-api-dev.onrender.com';
+  }
+  return 'https://dispecing-api.onrender.com';
+})();
+console.log('[INFO] API_URL =', API_URL);
 let API_TOKEN=null; // JWT token po prihlásení
 
 async function api(method, path, body=null){
