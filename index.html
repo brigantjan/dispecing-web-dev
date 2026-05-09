@@ -1633,7 +1633,14 @@ function switchTab(idx){
   if(activeTab===1 && idx!==1) bulkClear();
   activeTab=idx;
   if(idx===1){
-    renderObjTable();
+    // Optimalizácia: re-rendruj tabuľku len ak sa MOCK_OBJ zmenil od posledného render.
+    // Pri 3342 obj. by re-render trval ~2s; pri opakovanom prepínaní záložiek to bolo
+    // zbytočné. Hash počíta length + posledné 3 timestampy zmien (zachytí zmeny aj polling).
+    const curHash = (typeof getMockObjHash==='function') ? getMockObjHash() : Math.random();
+    if (curHash !== window.__lastObjRenderHash) {
+      renderObjTable();
+      window.__lastObjRenderHash = curHash;
+    }
     // Auto-scroll na koniec – najnovšie objednávky sú dole, dispečérka ich vidí hneď
     requestAnimationFrame(()=>{
       const wrap=document.querySelector('#page1 .tbl-wrap');
@@ -2819,6 +2826,14 @@ function dateFilterMatch(iso, query){
     return iso.startsWith(`${y}-${m.padStart(2,'0')}`);
   }
   return false;
+}
+
+// Hash MOCK_OBJ stavu – slúži switchTab(1) na rozhodnutie či treba re-rendrovať tabuľku.
+// Length + posledné 3 timestampy zmien zachytia 99% reálnych zmien (vrátane pollingu).
+function getMockObjHash(){
+  const len = MOCK_OBJ.length;
+  const last3 = MOCK_OBJ.slice(-3).map(o => o.zmeneny || '').join('|');
+  return `${len}_${last3}`;
 }
 
 function renderObjTable(){
