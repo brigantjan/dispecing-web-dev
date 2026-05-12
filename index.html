@@ -460,7 +460,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
         <div class="row2">
           <div class="field"><label>Typ</label>
             <input type="text" id="n-typ" list="dl-typ" placeholder="M/O/E/SAT..." onblur="this.value=this.value.trim();filterBalikForTyp(this.value);aiReTrigger()" onchange="filterBalikForTyp(this.value);aiReTrigger()" autocomplete="off">
-            <datalist id="dl-typ"><option>E</option><option>M</option><option>O</option><option>SAT</option><option>DPIV</option><option>DSAT</option><option>PIV</option><option>MX</option><option>PV</option><option>TV</option><option>TV go</option></datalist>
+            <datalist id="dl-typ"><option>E</option><option>M</option><option>O</option><option>PIV</option><option>PV</option><option>SAT</option><option>TV</option></datalist>
           </div>
           <div class="field"><label>Balík</label>
             <input type="text" id="n-balik" list="dl-balik" placeholder="M1/O1/SAT..." onblur="this.value=this.value.trim();aiReTrigger()" onchange="aiReTrigger()" autocomplete="off">
@@ -1750,7 +1750,7 @@ function fillTechDatalist(){
   // Typy z objednávok
   const dlTyp=document.getElementById('dl-typ');
   if(dlTyp){
-    const typy=[...new Set(['M','O','E','SAT','PIV','TV','PV','DPIV','DSAT','MX',...MOCK_OBJ.map(o=>o.typ).filter(Boolean)])].sort();
+    const typy=[...new Set(['M','O','E','SAT','PIV','TV','PV',...MOCK_OBJ.map(o=>o.typ).filter(Boolean)])].sort();
     dlTyp.innerHTML=typy.map(v=>`<option>${v}</option>`).join('');
   }
   // Balíky z objednávok
