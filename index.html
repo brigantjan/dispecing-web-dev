@@ -459,7 +459,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <input type="text" id="n-adresa" placeholder="Obec, Ulica číslo" onblur="this.value=this.value.trim();aiReTrigger()" autocomplete="off"></div>
         <div class="row2">
           <div class="field"><label>Typ</label>
-            <input type="text" id="n-typ" list="dl-typ" placeholder="M/O/E/SAT..." onblur="this.value=this.value.trim();aiReTrigger()" onchange="aiReTrigger()" autocomplete="off">
+            <input type="text" id="n-typ" list="dl-typ" placeholder="M/O/E/SAT..." onblur="this.value=this.value.trim();filterBalikForTyp(this.value);aiReTrigger()" onchange="filterBalikForTyp(this.value);aiReTrigger()" autocomplete="off">
             <datalist id="dl-typ"><option>E</option><option>M</option><option>O</option><option>SAT</option><option>DPIV</option><option>DSAT</option><option>PIV</option><option>MX</option><option>PV</option><option>TV</option><option>TV go</option></datalist>
           </div>
           <div class="field"><label>Balík</label>
@@ -855,7 +855,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="mfield"><label>Meno zákazníka</label><input type="text" id="e-meno" autocomplete="off"></div>
     <div class="mfield"><label>Adresa</label><input type="text" id="e-adresa" autocomplete="off"></div>
     <div class="mrow2">
-      <div class="mfield" style="padding:0"><label>Typ</label><input type="text" id="e-typ" list="dl-typ" autocomplete="off"></div>
+      <div class="mfield" style="padding:0"><label>Typ</label><input type="text" id="e-typ" list="dl-typ" onchange="filterBalikForTyp(this.value)" autocomplete="off"></div>
       <div class="mfield" style="padding:0"><label>Balík</label><input type="text" id="e-balik" list="dl-balik" autocomplete="off"></div>
     </div>
     <div class="mrow2">
@@ -1756,9 +1756,24 @@ function fillTechDatalist(){
   // Balíky z objednávok
   const dlBal=document.getElementById('dl-balik');
   if(dlBal){
-    const baliky=[...new Set(['M1','M2','M3','O1','O2','O3','SAT',...MOCK_OBJ.map(o=>o.balik).filter(Boolean)])].sort();
-    dlBal.innerHTML=baliky.map(v=>`<option>${v}</option>`).join('');
+    const baliky=[...new Set(['MX','M1','M2','M3','M4','M5','O0','O1','O2','O3','O4','O5','SAT','DSAT','PIV','DPIV','TV go','mesh','INSTAL',...MOCK_OBJ.map(o=>o.balik).filter(Boolean)])];
+    // Zachovaj poradie (nie sort) – MX,M1..M5, O0..O5, atď.
+    window._allBalikyList=baliky;
+    // Re-aplikuj filter ak je aktívny Typ vo formulári
+    const activeTyp=(document.getElementById('n-typ')||{}).value||'';
+    if(activeTyp) filterBalikForTyp(activeTyp);
+    else dlBal.innerHTML=baliky.map(v=>`<option>${v}</option>`).join('');
   }
+}
+// Prefiltruje dl-balik datalist podľa vybraného Typu objednávky
+// Volá sa z n-typ a e-typ onchange; ak Typ nie je v hierarchii → zobrazia sa všetky balíky
+function filterBalikForTyp(typVal){
+  const dlBal=document.getElementById('dl-balik');
+  if(!dlBal) return;
+  const full=window._allBalikyList||['MX','M1','M2','M3','M4','M5','O0','O1','O2','O3','O4','O5','SAT','DSAT','PIV','DPIV','TV go','mesh','INSTAL'];
+  const allowed=getAllowedBaliky(typVal);
+  const list=(allowed.size>0)?full.filter(b=>allowed.has(b)):full;
+  dlBal.innerHTML=list.map(v=>`<option>${v}</option>`).join('');
 }
 function fillFilterDropdowns(){
   ['f-typ'].forEach(id=>{
@@ -3312,6 +3327,7 @@ function otvorEditModal(id_obj){
   document.getElementById('e-meno').value=o.meno||'';
   document.getElementById('e-adresa').value=o.adresa||'';
   document.getElementById('e-typ').value=o.typ||'';
+  filterBalikForTyp(o.typ||'');
   document.getElementById('e-balik').value=o.balik||'';
   document.getElementById('e-prijatia').value=o.prijatia||'';
   document.getElementById('e-lt').value=o.lt||'';
@@ -3490,6 +3506,47 @@ function mobZapisozn(id){
 // ════════════════════════════════════════════════════════════
 const ROLE_OPTIONS=['admin','dispečér','technik','operátor'];
 
+// ── Hierarchia Typ → povolené balíky ────────────────────────────────────────
+// Zdroj pravdy pre celý systém (admin panel skills + filter dl-balik vo formulári)
+const SKILLS_HIERARCHY = {
+  'M':   ['MX','M1','M2','M3','M4','M5'],
+  'O':   ['O0','O1','O2','O3','O4','O5'],
+  'E':   ['O1','O2','O3','O4','O5'],
+  'SAT': ['SAT','DSAT'],
+  'PIV': ['PIV','DPIV'],
+  'TV':  ['TV go'],
+  'PV':  ['mesh','INSTAL'],
+};
+
+// Vráti Set povolených balíkov pre CSV reťazec typov (napr. "M,O")
+function getAllowedBaliky(skills_typy_str){
+  const typy=(skills_typy_str||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const allowed=new Set();
+  for(const t of typy) for(const b of (SKILLS_HIERARCHY[t]||[])) allowed.add(b);
+  return allowed;
+}
+
+// Vráti HTML checkboxov balíkov filtrovaných podľa zaškrtnutých typov technika
+function _renderBalikyCheckboxes(idx){
+  const u=DEMO_USERS[idx];
+  const allowed=getAllowedBaliky(u.skills_typy||'');
+  const allBaliky=['MX','M1','M2','M3','M4','M5','O0','O1','O2','O3','O4','O5','SAT','DSAT','PIV','DPIV','TV go','mesh','INSTAL'];
+  const filtered=allBaliky.filter(b=>allowed.has(b));
+  if(filtered.length===0)
+    return '<span style="font-size:11px;color:var(--muted);font-style:italic;padding:4px">← Najprv zaškrtnite typ objednávky</span>';
+  const curSet=new Set((u.skills_baliky||'').split(',').map(s=>s.trim()).filter(Boolean));
+  return filtered.map(opt=>{
+    const checked=curSet.has(opt);
+    return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:2px 6px;background:${checked?'#dcfce7':'#f3f4f6'};border:1px solid ${checked?'#4ade80':'#e5e7eb'};border-radius:4px;cursor:pointer;user-select:none"><input type="checkbox" ${checked?'checked':''} onchange="toggleSkill(${idx},'skills_baliky','${opt.replace(/'/g,"\\'")}',this.checked)" style="margin:0">${opt}</label>`;
+  }).join('');
+}
+
+// Re-renderuje iba balíky box daného technika (bez plného renderUserTable)
+function _rerenderBalikyBox(idx){
+  const box=document.getElementById('skills-baliky-box-'+idx);
+  if(box) box.innerHTML=_renderBalikyCheckboxes(idx);
+}
+
 // Helper: vytiahne <option> hodnoty z datalistu (dl-typ, dl-balik)
 // Používa sa pre rendering checkboxov v Kvalifikácii technika
 function getDatalistOptions(id){
@@ -3500,6 +3557,7 @@ function getDatalistOptions(id){
 
 // Helper: prepne checkbox v skills_typy alebo skills_baliky (CSV string)
 // Pridá/odoberie hodnotu zo setu a uloží cez updateUser → API PATCH
+// Pri odškrtnutí TYPU kaskádovo odstraní jeho balíky (ak nie sú kryté iným typom)
 function toggleSkill(idx,field,val,checked){
   if(idx>=DEMO_USERS.length) return;
   const cur=new Set((DEMO_USERS[idx][field]||'').split(',').map(s=>s.trim()).filter(Boolean));
@@ -3507,7 +3565,25 @@ function toggleSkill(idx,field,val,checked){
   // Zachová poradie z datalistu (sortBy dl-typ alebo dl-balik)
   const order=getDatalistOptions(field==='skills_typy'?'dl-typ':'dl-balik');
   const sorted=[...cur].sort((a,b)=>(order.indexOf(a)+1000*(order.indexOf(a)<0))-(order.indexOf(b)+1000*(order.indexOf(b)<0)));
+  DEMO_USERS[idx][field]=sorted.join(',');
   updateUser(idx,field,sorted.join(','));
+  // ── Kaskáda pri odškrtnutí TYPU ─────────────────────────────────────────
+  // Odstraní z skills_baliky balíky daného typu, ktoré nie sú kryté iným zaškrtnutým typom
+  if(field==='skills_typy' && !checked){
+    const removedPkgs=new Set(SKILLS_HIERARCHY[val]||[]);
+    if(removedPkgs.size>0){
+      const stillAllowed=getAllowedBaliky(sorted.join(',')); // zostatok typov
+      const curBaliky=new Set((DEMO_USERS[idx].skills_baliky||'').split(',').map(s=>s.trim()).filter(Boolean));
+      let changed=false;
+      for(const b of removedPkgs){ if(!stillAllowed.has(b) && curBaliky.has(b)){ curBaliky.delete(b); changed=true; } }
+      if(changed){
+        const orderB=getDatalistOptions('dl-balik');
+        const sortedB=[...curBaliky].sort((a,b)=>(orderB.indexOf(a)+1000*(orderB.indexOf(a)<0))-(orderB.indexOf(b)+1000*(orderB.indexOf(b)<0)));
+        DEMO_USERS[idx].skills_baliky=sortedB.join(',');
+        updateUser(idx,'skills_baliky',sortedB.join(','));
+      }
+    }
+  }
   // Vizuálny refresh checkboxu (background/border) bez plného re-renderu tabuľky
   const lbl=event?.target?.closest('label');
   if(lbl){
@@ -3515,6 +3591,8 @@ function toggleSkill(idx,field,val,checked){
     lbl.style.background=checked?(isTyp?'#dbeafe':'#dcfce7'):'#f3f4f6';
     lbl.style.borderColor=checked?(isTyp?'#60a5fa':'#4ade80'):'#e5e7eb';
   }
+  // Pri zmene typu re-renderuj balíky box (zmení sa zoznam viditeľných balíkov)
+  if(field==='skills_typy') _rerenderBalikyBox(idx);
 }
 
 // Helper: prepne checkbox "Na dovolenke" (na_dovolenke 0/1)
@@ -3614,12 +3692,9 @@ function renderUserTable(){
             </div>
           </div>
           <div class="field" style="margin:0">
-            <label style="font-size:11px;color:var(--muted)">Balíky</label>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;border:1px solid var(--border2);border-radius:5px;background:#fff;min-height:32px">
-              ${getDatalistOptions('dl-balik').map(opt=>{
-                const checked=(u.skills_baliky||'').split(',').map(s=>s.trim()).includes(opt);
-                return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:2px 6px;background:${checked?'#dcfce7':'#f3f4f6'};border:1px solid ${checked?'#4ade80':'#e5e7eb'};border-radius:4px;cursor:pointer;user-select:none"><input type="checkbox" ${checked?'checked':''} onchange="toggleSkill(${idx},'skills_baliky','${opt.replace(/'/g,"\\'")}',this.checked)" style="margin:0">${opt}</label>`;
-              }).join('')}
+            <label style="font-size:11px;color:var(--muted)">Balíky <span style="color:#9ca3af;font-weight:400">(podľa zaškrtnutých typov)</span></label>
+            <div id="skills-baliky-box-${idx}" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;border:1px solid var(--border2);border-radius:5px;background:#fff;min-height:32px">
+              ${_renderBalikyCheckboxes(idx)}
             </div>
           </div>
           <div class="field" style="margin:0;min-width:110px">
