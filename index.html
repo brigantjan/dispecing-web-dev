@@ -2568,6 +2568,7 @@ function zapisObjednavku(){
   else MOCK_OBJ.push(novyZaznam);
   mwfAfterZapisOk();
   toast(`✓ Zapísaná: ${idObj}`);setStatus(`✓ Zapísaná: ${idObj}`,'ok');
+  logHistoria(idObj, 'zapis', `Zapísaná (${currentUser?.meno})`);
   vymazatFormu();renderRecent();
   const cfv2=document.getElementById('cap-from')?.value||T;
   const ctv2=document.getElementById('cap-to')?.value||dt(9);
@@ -3121,6 +3122,8 @@ function emailPrerezerv(){
   document.body.appendChild(a);
   a.click();
   setTimeout(()=>{ URL.revokeObjectURL(url); if(a.parentNode) a.parentNode.removeChild(a); },1500);
+  // Zaznamenaj do histórie pre každú objednávku v emaily
+  prChecked.forEach(id=>logHistoria(id,'email',`Prerezervačný email vygenerovaný (${currentUser?.meno})`));
 
   // Označ email odoslaný + uloží do API
   prChecked.forEach(id=>{
@@ -3401,6 +3404,10 @@ function saveEdit(){
   }
   const _detail=_zmeny.length>0?_zmeny.join('; '):'bez zmien v dátach';
   logHistoria(editCurrentId,'zmena',`${currentUser?.meno}: ${_detail}`);
+  // Separátny záznam pre zmenu plánovaného dátumu (prerezervácia)
+  const _planNovy=document.getElementById('e-plan')?.value||'';
+  if(_planNovy && (editOrigPlan||'')!==_planNovy)
+    logHistoria(editCurrentId,'prerezerv',`Plán zmenený: ${fmtD(editOrigPlan)||'–'} → ${fmtD(_planNovy)} (${currentUser?.meno})`);
   api('PATCH',`/api/objednavky/${editCurrentId}`, mockToApi(o))
     .catch(e=>toast('⚠ API chyba: '+e.message));
 }
