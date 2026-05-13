@@ -1750,7 +1750,7 @@ function fillTechDatalist(){
   // Typy z objednávok
   const dlTyp=document.getElementById('dl-typ');
   if(dlTyp){
-    const typy=[...new Set(['M','O','E','SAT','PIV','TV','PV',...MOCK_OBJ.map(o=>o.typ).filter(Boolean)])].sort();
+    const typy=['E','M','O','PIV','PV','SAT','TV'];
     dlTyp.innerHTML=typy.map(v=>`<option>${v}</option>`).join('');
   }
   // Balíky z objednávok
