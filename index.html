@@ -736,6 +736,23 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 </div><!-- /app -->
 
 <!-- QR MODAL -->
+<!-- ── Mobilný potvrdzovací dialóg ─────────────────────────── -->
+<div class="modal-overlay" id="mob-confirm-overlay">
+  <div class="modal" style="max-width:360px;width:92%;border-radius:16px;padding:0;overflow:hidden" onclick="event.stopPropagation()">
+    <div id="mob-confirm-hdr" style="padding:20px 20px 12px;background:#f8f9fa;border-bottom:1px solid #e5e7eb">
+      <h3 id="mob-confirm-title" style="margin:0;font-size:18px;font-weight:700;color:#111"></h3>
+    </div>
+    <div style="padding:16px 20px 20px">
+      <p id="mob-confirm-text" style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.5"></p>
+      <div style="display:flex;gap:10px;flex-direction:column">
+        <button id="mob-confirm-yes" onclick="mobConfirmResolve(true)"
+          style="width:100%;padding:14px;font-size:16px;font-weight:700;border:none;border-radius:10px;cursor:pointer;color:#fff"></button>
+        <button onclick="mobConfirmResolve(false)"
+          style="width:100%;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;cursor:pointer;background:#e5e7eb;color:#374151">❌ Nie, zrušiť</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="qr-overlay" onclick="closeQR()">
 <div class="modal" style="max-width:400px" onclick="event.stopPropagation()">
   <div class="modal-hdr">
@@ -3501,34 +3518,74 @@ function renderMobil(){
 function mobStornoToggle(id){document.getElementById('storno-'+id).style.display=document.getElementById('storno-'+id).style.display==='none'?'block':'none';}
 function mobPoznToggle(id){document.getElementById('pozn-'+id).style.display=document.getElementById('pozn-'+id).style.display==='none'?'block':'none';}
 
+// ── Mobilný potvrdzovací dialóg ─────────────────────────────
+let _mobConfirmCb = null;
+function mobConfirm(title, text, btnLabel, btnColor, callback){
+  document.getElementById('mob-confirm-title').textContent = title;
+  document.getElementById('mob-confirm-text').textContent  = text;
+  const yes = document.getElementById('mob-confirm-yes');
+  yes.textContent       = btnLabel;
+  yes.style.background  = btnColor;
+  _mobConfirmCb = callback;
+  document.getElementById('mob-confirm-overlay').classList.add('open');
+}
+function mobConfirmResolve(ok){
+  document.getElementById('mob-confirm-overlay').classList.remove('open');
+  if(ok && _mobConfirmCb) try{ _mobConfirmCb(); }catch(e){ console.error(e); }
+  _mobConfirmCb = null;
+}
+
 function mobUzavri(id){
-  const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
-  MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();
-  updateDash();renderMobil();toast(`✅ Uzavreté: ${id}`);
-  logHistoria(id,'uzavretie',`Uzavreté dnes – mobil (${currentUser?.meno})`);
-  api('PATCH',`/api/objednavky/${id}`,{datum_realizacie:T,farba:'zelena'})
-    .catch(e=>toast('⚠ API chyba: '+e.message));
+  mobConfirm(
+    'Uzavrieť objednávku?',
+    `Skutočne uzavrieť objednávku ${id} ako dokončenú dnes?`,
+    '✅ Áno, uzavrieť', '#16a34a',
+    ()=>{
+      const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
+      MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();
+      updateDash();renderMobil();toast(`✅ Uzavreté: ${id}`);
+      logHistoria(id,'uzavretie',`Uzavreté dnes – mobil (${currentUser?.meno})`);
+      api('PATCH',`/api/objednavky/${id}`,{datum_realizacie:T,farba:'zelena'})
+        .catch(e=>toast('⚠ API chyba: '+e.message));
+    }
+  );
 }
 function mobStornuj(id){
-  const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
   const inp=document.getElementById('st-inp-'+id);
   if(!inp?.value.trim()){inp.style.borderColor='var(--red)';setTimeout(()=>inp.style.borderColor='',1500);toast('⚠ Zadajte dôvod storna!');return;}
-  MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=inp.value.trim();MOCK_OBJ[oi].zmeneny=now8();
-  updateDash();renderMobil();toast(`⚠ Vystornované: ${id}`);
-  logHistoria(id,'storno',`Storno – mobil: ${inp.value.trim()} (${currentUser?.meno})`);
-  api('PATCH',`/api/objednavky/${id}`,{datum_realizacie:T,farba:'zlta',poznamky:inp.value.trim()})
-    .catch(e=>toast('⚠ API chyba: '+e.message));
+  const dovod=inp.value.trim();
+  mobConfirm(
+    'Stornovať objednávku?',
+    `Skutočne stornovať objednávku ${id}? Táto akcia sa nedá vrátiť.`,
+    '✅ Áno, stornovať', '#dc2626',
+    ()=>{
+      const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
+      MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=dovod;MOCK_OBJ[oi].zmeneny=now8();
+      updateDash();renderMobil();toast(`⚠ Vystornované: ${id}`);
+      logHistoria(id,'storno',`Storno – mobil: ${dovod} (${currentUser?.meno})`);
+      api('PATCH',`/api/objednavky/${id}`,{datum_realizacie:T,farba:'zlta',poznamky:dovod})
+        .catch(e=>toast('⚠ API chyba: '+e.message));
+    }
+  );
 }
 function mobZapisozn(id){
-  const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
   const inp=document.getElementById('pz-inp-'+id);
   if(!inp?.value.trim()){toast('⚠ Zadajte poznámku!');return;}
-  const novaPozn=(MOCK_OBJ[oi].pozn?MOCK_OBJ[oi].pozn+' | ':'')+inp.value.trim();
-  MOCK_OBJ[oi].pozn=novaPozn;MOCK_OBJ[oi].zmeneny=now8();
-  renderMobil();toast(`📝 Poznámka uložená`);
-  logHistoria(id,'poznamka',`Poznámka – mobil: ${inp.value.trim()} (${currentUser?.meno})`);
-  api('PATCH',`/api/objednavky/${id}`,{poznamky:novaPozn})
-    .catch(e=>toast('⚠ API chyba: '+e.message));
+  const text=inp.value.trim();
+  mobConfirm(
+    'Pridať poznámku?',
+    `Uložiť poznámku k objednávke ${id}?`,
+    '✅ Áno, uložiť', '#2563eb',
+    ()=>{
+      const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
+      const novaPozn=(MOCK_OBJ[oi].pozn?MOCK_OBJ[oi].pozn+' | ':'')+text;
+      MOCK_OBJ[oi].pozn=novaPozn;MOCK_OBJ[oi].zmeneny=now8();
+      renderMobil();toast(`📝 Poznámka uložená`);
+      logHistoria(id,'poznamka',`Poznámka – mobil: ${text} (${currentUser?.meno})`);
+      api('PATCH',`/api/objednavky/${id}`,{poznamky:novaPozn})
+        .catch(e=>toast('⚠ API chyba: '+e.message));
+    }
+  );
 }
 // ════════════════════════════════════════════════════════════
 // SPRÁVA POUŽÍVATEĽOV (admin)
