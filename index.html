@@ -2585,7 +2585,7 @@ function zapisObjednavku(){
   else MOCK_OBJ.push(novyZaznam);
   mwfAfterZapisOk();
   toast(`✓ Zapísaná: ${idObj}`);setStatus(`✓ Zapísaná: ${idObj}`,'ok');
-  logHistoria(idObj, 'zapis', `Zapísaná (${currentUser?.meno})`);
+  logHistoria(idObj, 'zapis', `Zápis: ${novyZaznam.meno}, ${novyZaznam.adresa}, plán: ${novyZaznam.plan||'–'}, technik: ${novyZaznam.zdroj||'–'}`);
   vymazatFormu();renderRecent();
   const cfv2=document.getElementById('cap-from')?.value||T;
   const ctv2=document.getElementById('cap-to')?.value||dt(9);
@@ -3140,7 +3140,7 @@ function emailPrerezerv(){
   a.click();
   setTimeout(()=>{ URL.revokeObjectURL(url); if(a.parentNode) a.parentNode.removeChild(a); },1500);
   // Zaznamenaj do histórie pre každú objednávku v emaily
-  prChecked.forEach(id=>logHistoria(id,'email',`Prerezervačný email vygenerovaný (${currentUser?.meno})`));
+  prChecked.forEach(id=>logHistoria(id,'email','Email prerezervácie odoslaný'));
 
   // Označ email odoslaný + uloží do API
   prChecked.forEach(id=>{
@@ -3405,26 +3405,25 @@ function saveEdit(){
   o.real=document.getElementById('e-real').value;o.farba=farba;o.zmeneny=now8();
   toast(`✓ Uložené: ${editCurrentId}`);setStatus(`✓ Zmenené: ${editCurrentId}`,'ok');
   closeEdit();afterEditRefresh();
-  // Diff histórie – zaznamenaj len skutočne zmenené polia
-  const _LABELS={meno:'Meno',adresa:'Adresa',typ:'Typ',balik:'Balík',prijatia:'Prijatie',
-    lt:'LT',add_txt:'ADD',plan:'Plán',zdroj:'Technik',pozn:'Poznámky',
-    telefon:'Telefón',real:'Realizácia'};
-  const _newVals={meno:o.meno,adresa:o.adresa,typ:o.typ,balik:o.balik,
-    prijatia:o.prijatia,lt:o.lt,add_txt:o.add_txt,plan:o.plan,
-    zdroj:o.zdroj,pozn:o.pozn,telefon:o.telefon,real:o.real};
-  const _zmeny=[];
-  if(editOrigObj){
-    for(const [f,lbl] of Object.entries(_LABELS)){
-      const ov=editOrigObj[f]||'–'; const nv=_newVals[f]||'–';
-      if(ov!==nv) _zmeny.push(`${lbl}: „${ov}" → „${nv}"`);
-    }
+  // ── Granulárne logovanie histórie ──────────────────────────
+  if(farba==='zelena'){
+    logHistoria(editCurrentId,'uzavretie',`Uzavretie: realizácia ${o.real||T}`);
+  } else if(farba==='zlta'){
+    logHistoria(editCurrentId,'storno','Stornovanie');
+  } else if(farba==='modra'){
+    logHistoria(editCurrentId,'prerezerv','Prerezervácia');
+  } else if(editOrigObj){
+    if((editOrigObj.plan||'')!==(o.plan||'') && o.plan)
+      logHistoria(editCurrentId,'zmena',`Preplánování: ${fmtD(editOrigObj.plan)||'–'} → ${fmtD(o.plan)}`);
+    if((editOrigObj.zdroj||'')!==(o.zdroj||''))
+      logHistoria(editCurrentId,'zmena',`Technik: „${editOrigObj.zdroj||'–'}" → „${o.zdroj||'–'}"`);
+    if((editOrigObj.pozn||'')!==(o.pozn||'') && o.pozn)
+      logHistoria(editCurrentId,'zmena',`Poznámka: ${o.pozn}`);
+    const _ostF=['meno','adresa','typ','balik','prijatia','lt','add_txt','real','telefon'];
+    const _ostL={meno:'Meno',adresa:'Adresa',typ:'Typ',balik:'Balík',prijatia:'Prijatie',lt:'LT',add_txt:'ADD',real:'Realizácia',telefon:'Telefón'};
+    const _ost=_ostF.filter(f=>(editOrigObj[f]||'')!==(o[f]||'')).map(f=>`${_ostL[f]}: „${editOrigObj[f]||'–'}" → „${o[f]||'–'}"`);
+    if(_ost.length) logHistoria(editCurrentId,'zmena',_ost.join('; '));
   }
-  const _detail=_zmeny.length>0?_zmeny.join('; '):'bez zmien v dátach';
-  logHistoria(editCurrentId,'zmena',`${currentUser?.meno}: ${_detail}`);
-  // Separátny záznam pre zmenu plánovaného dátumu (prerezervácia)
-  const _planNovy=document.getElementById('e-plan')?.value||'';
-  if(_planNovy && (editOrigPlan||'')!==_planNovy)
-    logHistoria(editCurrentId,'prerezerv',`Plán zmenený: ${fmtD(editOrigPlan)||'–'} → ${fmtD(_planNovy)} (${currentUser?.meno})`);
   api('PATCH',`/api/objednavky/${editCurrentId}`, mockToApi(o))
     .catch(e=>toast('⚠ API chyba: '+e.message));
 }
@@ -3432,7 +3431,7 @@ function uzavriDnes(){
   const oi=MOCK_OBJ.findIndex(o=>o.id_obj===editCurrentId);if(oi<0)return;
   MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();
   toast(`✅ Uzavreté: ${editCurrentId}`);closeEdit();afterEditRefresh();
-  logHistoria(editCurrentId,'uzavretie',`Uzavreté dnes (${currentUser?.meno})`);
+  logHistoria(editCurrentId,'uzavretie',`Uzavretie: realizácia ${T}`);
   api('PATCH',`/api/objednavky/${editCurrentId}`,{datum_realizacie:T,farba:'zelena'})
     .catch(e=>toast('⚠ API chyba: '+e.message));
 }
@@ -3442,7 +3441,7 @@ function stornujDnes(){
   if(!pozn){const w=document.getElementById('e-warn');w.style.display='block';w.textContent='⚠ Dôvod storna musí byť v Poznámkach!';return;}
   MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=pozn;MOCK_OBJ[oi].zmeneny=now8();
   toast(`⚠ Vystornované: ${editCurrentId}`);closeEdit();afterEditRefresh();
-  logHistoria(editCurrentId,'storno',`Storno: ${pozn} (${currentUser?.meno})`);
+  logHistoria(editCurrentId,'storno','Stornovanie');
   api('PATCH',`/api/objednavky/${editCurrentId}`,{datum_realizacie:T,farba:'zlta',poznamky:pozn})
     .catch(e=>toast('⚠ API chyba: '+e.message));
 }
@@ -3544,7 +3543,7 @@ function mobUzavri(id){
       const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
       MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();
       updateDash();renderMobil();toast(`✅ Uzavreté: ${id}`);
-      logHistoria(id,'uzavretie',`Uzavreté dnes – mobil (${currentUser?.meno})`);
+      logHistoria(id,'uzavretie',`Uzavretie: realizácia ${T}`);
       api('PATCH',`/api/objednavky/${id}`,{datum_realizacie:T,farba:'zelena'})
         .catch(e=>toast('⚠ API chyba: '+e.message));
     }
@@ -3562,7 +3561,7 @@ function mobStornuj(id){
       const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
       MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=dovod;MOCK_OBJ[oi].zmeneny=now8();
       updateDash();renderMobil();toast(`⚠ Vystornované: ${id}`);
-      logHistoria(id,'storno',`Storno – mobil: ${dovod} (${currentUser?.meno})`);
+      logHistoria(id,'storno','Stornovanie');
       api('PATCH',`/api/objednavky/${id}`,{datum_realizacie:T,farba:'zlta',poznamky:dovod})
         .catch(e=>toast('⚠ API chyba: '+e.message));
     }
@@ -3581,7 +3580,7 @@ function mobZapisozn(id){
       const novaPozn=(MOCK_OBJ[oi].pozn?MOCK_OBJ[oi].pozn+' | ':'')+text;
       MOCK_OBJ[oi].pozn=novaPozn;MOCK_OBJ[oi].zmeneny=now8();
       renderMobil();toast(`📝 Poznámka uložená`);
-      logHistoria(id,'poznamka',`Poznámka – mobil: ${text} (${currentUser?.meno})`);
+      logHistoria(id,'poznamka',`Poznámka: ${text}`);
       api('PATCH',`/api/objednavky/${id}`,{poznamky:novaPozn})
         .catch(e=>toast('⚠ API chyba: '+e.message));
     }
