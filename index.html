@@ -2711,9 +2711,10 @@ function draftStartAutosave(){
 // ════════════════════════════════════════════════════════════
 function renderRecent(){
   const el=document.getElementById('recent-box');
-  // Zoradenie rovnaké ako hlavná tabuľka: prijatia DESC → id_obj DESC.
-  // "Posledných 5" tu zodpovedá presne posledným 5 riadkom tabuľky Objednávky.
-  const keyOf = o => (o.prijatia||'') + '|' + (o.id_obj||'');
+  // Zoradenie podľa "kedy bol záznam zapísaný do DB" – vytvoreny DESC.
+  // Fallback na zmeneny ak vytvoreny chýba (legacy záznamy).
+  // Bez ohľadu na úpravy – editácia zmeneny mení, ale poradie v zozname ostáva.
+  const keyOf = o => o.vytvoreny || o.zmeneny || '';
   const sorted=[...MOCK_OBJ].sort((a,b)=>keyOf(b).localeCompare(keyOf(a))).slice(0,5);
   if(!sorted.length){el.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">–</div>';return;}
   el.innerHTML=sorted.map(o=>{
@@ -2908,7 +2909,7 @@ function renderObjTable(){
   // Default zoradenie: najstaršie hore, NAJNOVŠIE DOLE (chronologicky podľa prijatia).
   // Pri 10k+ riadkoch dispečérka vidí najnovšie po auto-scrolle na koniec
   // bez nutnosti listovať celý zoznam.
-  rows.sort((a,b)=>(a.prijatia||'').localeCompare(b.prijatia||'')||(a.id_obj||'').localeCompare(b.id_obj||''));
+  rows.sort((a,b)=>(a.prijatia||'').localeCompare(b.prijatia||'')||(a.vytvoreny||a.id_obj||'').localeCompare(b.vytvoreny||b.id_obj||''));
   if(quickMode==='neukoncene')rows=rows.filter(o=>!o.real&&o.farba!=='zlta');
   else if(quickMode==='ukoncene')rows=rows.filter(o=>o.real&&o.farba==='zelena');
   else if(quickMode==='storno')rows=rows.filter(o=>o.farba==='zlta');
