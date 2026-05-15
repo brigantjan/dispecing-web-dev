@@ -4444,7 +4444,7 @@ function showDennySumar(){
     });
   } else {
     const o=document.createElement('option');
-    o.value=currentUser.meno; o.textContent=currentUser.meno; sel.appendChild(o);
+    o.value=''; o.textContent=currentUser.meno; sel.appendChild(o);
     sel.disabled=true;
   }
   document.getElementById('ds-export-btn').style.display='none';
