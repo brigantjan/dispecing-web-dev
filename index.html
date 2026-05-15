@@ -3414,7 +3414,7 @@ function saveEdit(){
     logHistoria(editCurrentId,'prerezerv','Prerezervácia');
   } else if(editOrigObj){
     if((editOrigObj.plan||'')!==(o.plan||'') && o.plan)
-      logHistoria(editCurrentId,'zmena',`Preplánování: ${fmtD(editOrigObj.plan)||'–'} → ${fmtD(o.plan)}`);
+      logHistoria(editCurrentId,'zmena',`Preplánovanie: ${fmtD(editOrigObj.plan)||'–'} → ${fmtD(o.plan)}`);
     if((editOrigObj.zdroj||'')!==(o.zdroj||''))
       logHistoria(editCurrentId,'zmena',`Technik: „${editOrigObj.zdroj||'–'}" → „${o.zdroj||'–'}"`);
     if((editOrigObj.pozn||'')!==(o.pozn||'') && o.pozn)
