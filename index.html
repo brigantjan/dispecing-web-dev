@@ -565,6 +565,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="quick-btn" id="qb-zajtra" onclick="quickFilter('zajtra')" title="Plán = zajtra">📅 Zajtra</div>
       <span class="sum-lbl ml-a" id="s-sum"></span>
       <button class="btn btn-outline btn-xs" onclick="zobrazStatistiky()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📊 Štatistiky</button>
+      <button id="btn-denny-sumar" class="btn btn-outline btn-xs" onclick="showDennySumar()" style="padding:5px 10px;font-size:12px;white-space:nowrap;display:none">📑 Denný súmar</button>
       <button class="btn btn-outline btn-xs" onclick="exportMesacnyVykaz()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📋 Mesačný výkaz</button>
       <button class="btn btn-green btn-xs" onclick="exportExcel()" title="Exportovať zobrazené záznamy do Excelu" style="padding:5px 12px;font-size:12px;font-weight:600;white-space:nowrap">📥 Export Excel</button>
       <button class="btn btn-outline btn-xs" onclick="zobrazNapovedu()" title="Nápoveda – klávesové skratky" style="padding:5px 10px;font-size:12px;white-space:nowrap">⌨ Skratky</button>
@@ -736,6 +737,26 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 </div><!-- /app -->
 
 <!-- QR MODAL -->
+<!-- ── Denný súmar ──────────────────────────────────────────── -->
+<div class="modal-overlay" id="denny-sumar-overlay" onclick="closeDennySumar()">
+  <div class="modal" style="max-width:960px;width:96%;max-height:90vh;display:flex;flex-direction:column;padding:0" onclick="event.stopPropagation()">
+    <div class="modal-hdr" style="padding:14px 18px;flex-shrink:0">
+      <h3 style="margin:0;font-size:16px">📑 Denný súmar</h3>
+      <button class="modal-close" onclick="closeDennySumar()">✕</button>
+    </div>
+    <div style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0;background:#f8f9fa">
+      <label style="font-size:13px;font-weight:600">Dátum:</label>
+      <input type="date" id="ds-datum" style="border:1px solid var(--border2);border-radius:6px;padding:5px 8px;font-size:13px">
+      <label style="font-size:13px;font-weight:600">Používateľ:</label>
+      <select id="ds-user" style="border:1px solid var(--border2);border-radius:6px;padding:5px 8px;font-size:13px;min-width:160px"></select>
+      <button class="btn btn-primary btn-xs" onclick="loadDennySumar()" style="padding:6px 16px;font-size:13px">🔍 Načítať</button>
+      <button id="ds-export-btn" class="btn btn-outline btn-xs" onclick="exportDennySumarExcel()" style="padding:6px 14px;font-size:13px;display:none">📥 Export Excel</button>
+    </div>
+    <div id="ds-content" style="flex:1;overflow-y:auto;padding:12px 16px">
+      <p style="color:var(--muted);font-size:13px;text-align:center;margin-top:40px">Vyberte dátum a kliknite Načítať.</p>
+    </div>
+  </div>
+</div>
 <!-- ── Mobilný potvrdzovací dialóg ─────────────────────────── -->
 <div class="modal-overlay" id="mob-confirm-overlay">
   <div class="modal" style="max-width:360px;width:92%;border-radius:16px;padding:0;overflow:hidden" onclick="event.stopPropagation()">
@@ -1595,6 +1616,8 @@ function applyRole(user){
   if(dash) dash.style.display = (isTech||isOper) ? 'none' : '';
   const nb=document.getElementById('notif-btn');
   if(nb) nb.style.display = (isTech||isOper) ? 'none' : '';
+  const dsBtn=document.getElementById('btn-denny-sumar');
+  if(dsBtn) dsBtn.style.display=(isAdmin||isDisp)?'':'none';
 
   document.getElementById('app').classList.toggle('technik-mode',isTech);
 }
@@ -4406,6 +4429,99 @@ function vykonatHromadnaZmena(){
 }
 
 // ════════════════════════════════════════════════════════════
+// ── Denný súmar ─────────────────────────────────────────────
+const _DS_AKCIA={zapis:'Zápis',zmena:'Zmena',uzavretie:'Uzavretie',storno:'Storno',prerezerv:'Prerezervácia',email:'Email',poznamka:'Poznámka'};
+const _DS_COLOR={zapis:'#dcfce7',zmena:'#f1f5f9',uzavretie:'#bbf7d0',storno:'#fef9c3',prerezerv:'#dbeafe',email:'#f3e8ff',poznamka:'#fff'};
+
+function showDennySumar(){
+  const inp=document.getElementById('ds-datum');
+  if(inp && !inp.value) inp.value=T;
+  const sel=document.getElementById('ds-user');
+  sel.innerHTML=''; sel.disabled=false;
+  if(currentUser?.rola==='admin'){
+    sel.innerHTML='<option value="">— Všetci —</option>';
+    (DEMO_USERS||[]).filter(u=>u.rola==='admin'||u.rola==='dispečér').forEach(u=>{
+      const o=document.createElement('option');
+      o.value=u.meno; o.textContent=u.meno; sel.appendChild(o);
+    });
+  } else {
+    const o=document.createElement('option');
+    o.value=currentUser.meno; o.textContent=currentUser.meno; sel.appendChild(o);
+    sel.disabled=true;
+  }
+  document.getElementById('ds-export-btn').style.display='none';
+  document.getElementById('ds-content').innerHTML='<p style="color:var(--muted);font-size:13px;text-align:center;margin-top:40px">Vyberte dátum a kliknite Načítať.</p>';
+  document.getElementById('denny-sumar-overlay').classList.add('open');
+}
+function closeDennySumar(){
+  document.getElementById('denny-sumar-overlay').classList.remove('open');
+}
+async function loadDennySumar(){
+  const datum=document.getElementById('ds-datum').value;
+  if(!datum){toast('⚠ Vyberte dátum');return;}
+  const userMeno=document.getElementById('ds-user').value;
+  const cont=document.getElementById('ds-content');
+  cont.innerHTML='<p style="text-align:center;color:var(--muted);margin-top:40px">⏳ Načítavam...</p>';
+  document.getElementById('ds-export-btn').style.display='none';
+  try{
+    let url=`/api/historia/dennysumar?datum=${datum}`;
+    if(userMeno) url+=`&user_meno=${encodeURIComponent(userMeno)}`;
+    const data=await api('GET',url);
+    if(!data.length){cont.innerHTML='<p style="text-align:center;color:var(--muted);margin-top:40px">Žiadne záznamy pre vybraný deň.</p>';return;}
+    window._dsSumar=data; window._dsDatum=datum;
+    document.getElementById('ds-export-btn').style.display='';
+    let h='<table style="width:100%;border-collapse:collapse;font-size:13px">';
+    h+='<thead><tr style="background:#e8eaf6;position:sticky;top:0;z-index:1">';
+    ['Čas','ID obj.','Zákazník','Adresa','Používateľ','Úkon','Detail'].forEach(t=>{
+      h+=`<th style="padding:8px 10px;text-align:left;font-weight:700;color:#283593;border-bottom:2px solid #c5cae9;white-space:nowrap">${t}</th>`;
+    });
+    h+='</tr></thead><tbody>';
+    data.forEach((grp,gi)=>{
+      const o=MOCK_OBJ.find(x=>x.id_obj===grp.id_obj)||{};
+      const bg=gi%2===0?'#fff':'#f8fafc';
+      grp.zaznamy.forEach((z,zi)=>{
+        const isFirst=zi===0;
+        const cas=(z.cas||'').substring(11,16);
+        const akcia=_DS_AKCIA[z.akcia]||z.akcia;
+        const aBg=_DS_COLOR[z.akcia]||'#fff';
+        h+=`<tr style="background:${bg};border-bottom:1px solid #e5e7eb">`;
+        h+=`<td style="padding:6px 10px;white-space:nowrap;color:#555;font-size:12px">${cas}</td>`;
+        h+=isFirst?`<td style="padding:6px 10px;white-space:nowrap;font-weight:700;color:#1e3a8a;font-size:12px">${grp.id_obj}</td>`
+                  :`<td style="padding:6px 18px;color:#bbb;font-size:11px">↳</td>`;
+        h+=isFirst?`<td style="padding:6px 10px;font-weight:600;font-size:12px">${o.meno||''}</td>`:`<td></td>`;
+        h+=isFirst?`<td style="padding:6px 10px;color:#555;font-size:12px">${o.adresa||''}</td>`:`<td></td>`;
+        h+=`<td style="padding:6px 10px;color:#555;white-space:nowrap;font-size:12px">${z.user_meno||''}</td>`;
+        h+=`<td style="padding:6px 10px"><span style="background:${aBg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${akcia}</span></td>`;
+        h+=`<td style="padding:6px 10px;color:#374151;font-size:12px">${z.detail||'–'}</td>`;
+        h+='</tr>';
+      });
+      if(gi<data.length-1) h+=`<tr><td colspan="7" style="padding:0;background:#cbd5e1;height:2px"></td></tr>`;
+    });
+    h+='</tbody></table>';
+    cont.innerHTML=h;
+  }catch(e){
+    cont.innerHTML=`<p style="text-align:center;color:var(--red);margin-top:40px">⚠ Chyba: ${e.message}</p>`;
+  }
+}
+function exportDennySumarExcel(){
+  const data=window._dsSumar; const datum=window._dsDatum||'';
+  if(!data) return;
+  const rows=[['Čas','ID obj.','Zákazník','Adresa','Používateľ','Úkon','Detail']];
+  data.forEach(grp=>{
+    const o=MOCK_OBJ.find(x=>x.id_obj===grp.id_obj)||{};
+    grp.zaznamy.forEach((z,zi)=>{
+      rows.push([(z.cas||'').substring(11,16),zi===0?grp.id_obj:'',
+        zi===0?(o.meno||''):'',zi===0?(o.adresa||''):'',
+        z.user_meno||'',_DS_AKCIA[z.akcia]||z.akcia,z.detail||'']);
+    });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:6},{wch:12},{wch:22},{wch:32},{wch:18},{wch:14},{wch:50}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Denný súmar');
+  XLSX.writeFile(wb,`DennySumar_${datum}.xlsx`);
+}
+
 // ZMENA 3: HISTÓRIA ZMIEN
 // ════════════════════════════════════════════════════════════
 function logHistoria(id_obj,akcia,detail){
