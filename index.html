@@ -565,7 +565,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="quick-btn" id="qb-zajtra" onclick="quickFilter('zajtra')" title="Plán = zajtra">📅 Zajtra</div>
       <span class="sum-lbl ml-a" id="s-sum"></span>
       <button class="btn btn-outline btn-xs" onclick="zobrazStatistiky()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📊 Štatistiky</button>
-      <button id="btn-denny-sumar" class="btn btn-outline btn-xs" onclick="showDennySumar()" style="padding:5px 10px;font-size:12px;white-space:nowrap;display:none">📑 Denný súmar</button>
+      <button id="btn-denny-sumar" class="btn btn-outline btn-xs" onclick="showDennySumar()" style="padding:5px 10px;font-size:12px;white-space:nowrap;display:none">📑 Denný sumár</button>
       <button class="btn btn-outline btn-xs" onclick="exportMesacnyVykaz()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📋 Mesačný výkaz</button>
       <button class="btn btn-green btn-xs" onclick="exportExcel()" title="Exportovať zobrazené záznamy do Excelu" style="padding:5px 12px;font-size:12px;font-weight:600;white-space:nowrap">📥 Export Excel</button>
       <button class="btn btn-outline btn-xs" onclick="zobrazNapovedu()" title="Nápoveda – klávesové skratky" style="padding:5px 10px;font-size:12px;white-space:nowrap">⌨ Skratky</button>
@@ -737,11 +737,11 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 </div><!-- /app -->
 
 <!-- QR MODAL -->
-<!-- ── Denný súmar ──────────────────────────────────────────── -->
+<!-- ── Denný sumár ──────────────────────────────────────────── -->
 <div class="modal-overlay" id="denny-sumar-overlay" onclick="closeDennySumar()">
   <div class="modal" style="max-width:960px;width:96%;max-height:90vh;display:flex;flex-direction:column;padding:0" onclick="event.stopPropagation()">
     <div class="modal-hdr" style="padding:14px 18px;flex-shrink:0">
-      <h3 style="margin:0;font-size:16px">📑 Denný súmar</h3>
+      <h3 style="margin:0;font-size:16px">📑 Denný sumár</h3>
       <button class="modal-close" onclick="closeDennySumar()">✕</button>
     </div>
     <div style="padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0;background:#f8f9fa">
@@ -2711,12 +2711,9 @@ function draftStartAutosave(){
 // ════════════════════════════════════════════════════════════
 function renderRecent(){
   const el=document.getElementById('recent-box');
-  // Zoradenie podľa "kedy bol záznam zapísaný do systému" (vytvoreny TIMESTAMPTZ z DB).
-  // Predtým sa triedilo podľa 'zmeneny' (last modified), čo bolo zavádzajúce – stará
-  // objednávka po editácii (uzavretí, storne, oprave poznámky) skákala na vrch hoci
-  // bola zapísaná dávno. Teraz ide naozaj o "naposledy zapísané" objednávky.
-  // Fallback: ak chýba 'vytvoreny' (legacy záznamy), použijeme 'zmeneny' (history vyrobená pri prvom zápise).
-  const keyOf = o => o.vytvoreny || o.zmeneny || '';
+  // Zoradenie rovnaké ako hlavná tabuľka: prijatia DESC → id_obj DESC.
+  // "Posledných 5" tu zodpovedá presne posledným 5 riadkom tabuľky Objednávky.
+  const keyOf = o => (o.prijatia||'') + '|' + (o.id_obj||'');
   const sorted=[...MOCK_OBJ].sort((a,b)=>keyOf(b).localeCompare(keyOf(a))).slice(0,5);
   if(!sorted.length){el.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">–</div>';return;}
   el.innerHTML=sorted.map(o=>{
@@ -4429,7 +4426,7 @@ function vykonatHromadnaZmena(){
 }
 
 // ════════════════════════════════════════════════════════════
-// ── Denný súmar ─────────────────────────────────────────────
+// ── Denný sumár ─────────────────────────────────────────────
 const _DS_AKCIA={zapis:'Zápis',zmena:'Zmena',uzavretie:'Uzavretie',storno:'Storno',prerezerv:'Prerezervácia',email:'Email',poznamka:'Poznámka'};
 const _DS_COLOR={zapis:'#dcfce7',zmena:'#f1f5f9',uzavretie:'#bbf7d0',storno:'#fef9c3',prerezerv:'#dbeafe',email:'#f3e8ff',poznamka:'#fff'};
 
@@ -4518,7 +4515,7 @@ function exportDennySumarExcel(){
   const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=[{wch:6},{wch:12},{wch:22},{wch:32},{wch:18},{wch:14},{wch:50}];
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Denný súmar');
+  XLSX.utils.book_append_sheet(wb,ws,'Denný sumár');
   XLSX.writeFile(wb,`DennySumar_${datum}.xlsx`);
 }
 
