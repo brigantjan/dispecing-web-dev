@@ -2637,7 +2637,7 @@ function zapisObjednavku(){
       const _pf=novyZaznam.plan?fmtD(novyZaznam.plan):'–';
       const _ct=novyZaznam.cas_od?` a časovým oknom ${novyZaznam.cas_od} – ${novyZaznam.cas_do}`:'';
       const _subj=`Pridelená objednávka: ${novyZaznam.meno} – ${novyZaznam.adresa}`;
-      const _bod=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_pf}${_ct}.\n\nZákazník: ${novyZaznam.meno}\nAdresa: ${novyZaznam.adresa}\nTyp: ${novyZaznam.typ} | Balík: ${novyZaznam.balik}\nLT: ${novyZaznam.lt||'–'}\n\nDISPECING SUPTEL`;
+      const _bod=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_pf}${_ct}.\n\nID: ${idObj}\nZákazník: ${novyZaznam.meno}\nAdresa: ${novyZaznam.adresa}\nTyp: ${novyZaznam.typ} | Balík: ${novyZaznam.balik}\nLT: ${novyZaznam.lt||'–'}\n\nDISPECING SUPTEL`;
       const _a=document.createElement('a');
       _a.href=`mailto:${_nt.technik_email}?subject=${encodeURIComponent(_subj)}&body=${encodeURIComponent(_bod)}`;
       _a.style.display='none';
@@ -3483,7 +3483,7 @@ function saveEdit(){
       const _planFmt=o.plan?fmtD(o.plan):'–';
       const _casText=o.cas_od?` a časovým oknom ${o.cas_od} – ${o.cas_do}`:'';
       const _subj=`Pridelená objednávka: ${o.meno} – ${o.adresa}`;
-      const _body=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_planFmt}${_casText}.\n\nZákazník: ${o.meno}\nAdresa: ${o.adresa}\nTyp: ${o.typ} | Balík: ${o.balik}\nLT: ${o.lt||'–'}\n\nDISPECING SUPTEL`;
+      const _body=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_planFmt}${_casText}.\n\nID: ${editCurrentId}\nZákazník: ${o.meno}\nAdresa: ${o.adresa}\nTyp: ${o.typ} | Balík: ${o.balik}\nLT: ${o.lt||'–'}\n\nDISPECING SUPTEL`;
       const _a=document.createElement('a');
       _a.href=`mailto:${_tech.technik_email}?subject=${encodeURIComponent(_subj)}&body=${encodeURIComponent(_body)}`;
       _a.style.display='none';
