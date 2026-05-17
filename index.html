@@ -4058,7 +4058,8 @@ function updateUser(idx,field,val){
 
 function pridajUsera(){
   const stredisko=currentUser?.stredisko||'zilina';
-  const novy={email:'novy@suptel.sk',heslo:'Heslo123!',meno:'Nový používateľ',rola:'operátor',ini:'NP',technik_meno:'',imap_server:'posta.suptel.cz',imap_email:'',imap_heslo:'',skills_typy:'',skills_baliky:'',tim_velkost:1,na_dovolenke:0,dovolenka_od:'',dovolenka_do:'',stredisko};
+  const uid=Date.now().toString(36);
+  const novy={email:`novy_${uid}@suptel.sk`,heslo:'Heslo123!',meno:'Nový používateľ',rola:'operátor',ini:'NP',technik_meno:'',imap_server:'posta.suptel.cz',imap_email:'',imap_heslo:'',skills_typy:'',skills_baliky:'',tim_velkost:1,na_dovolenke:0,dovolenka_od:'',dovolenka_do:'',stredisko};
   // Vytvor na API
   const rolaApiMap={'operátor':'operator','dispečér':'dispecer','admin':'admin','technik':'technik','vedenie':'vedenie'};
   api('POST','/api/users',{
