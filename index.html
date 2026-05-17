@@ -2630,6 +2630,22 @@ function zapisObjednavku(){
   mwfAfterZapisOk();
   toast(`✓ Zapísaná: ${idObj}`);setStatus(`✓ Zapísaná: ${idObj}`,'ok');
   logHistoria(idObj, 'zapis', `Zápis: ${novyZaznam.meno}, ${novyZaznam.adresa}, plán: ${novyZaznam.plan||'–'}, technik: ${novyZaznam.zdroj||'–'}`);
+  // Email technikovi cez Outlook ak má zapnuté notifikácie
+  if(novyZaznam.zdroj){
+    const _nt=DEMO_USERS.find(u=>u.technik_meno===novyZaznam.zdroj&&u.technik_email_notify&&u.technik_email);
+    if(_nt){
+      const _pf=novyZaznam.plan?fmtD(novyZaznam.plan):'–';
+      const _ct=novyZaznam.cas_od?` a časovým oknom ${novyZaznam.cas_od} – ${novyZaznam.cas_do}`:'';
+      const _subj=`Pridelená objednávka: ${novyZaznam.meno} – ${novyZaznam.adresa}`;
+      const _bod=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_pf}${_ct}.\n\nZákazník: ${novyZaznam.meno}\nAdresa: ${novyZaznam.adresa}\nTyp: ${novyZaznam.typ} | Balík: ${novyZaznam.balik}\nLT: ${novyZaznam.lt||'–'}\n\nDISPECING SUPTEL`;
+      const _a=document.createElement('a');
+      _a.href=`mailto:${_nt.technik_email}?subject=${encodeURIComponent(_subj)}&body=${encodeURIComponent(_bod)}`;
+      _a.style.display='none';
+      document.body.appendChild(_a);
+      _a.click();
+      setTimeout(()=>_a.parentNode&&_a.parentNode.removeChild(_a),1000);
+    }
+  }
   vymazatFormu();renderRecent();
   const cfv2=document.getElementById('cap-from')?.value||T;
   const ctv2=document.getElementById('cap-to')?.value||dt(9);
