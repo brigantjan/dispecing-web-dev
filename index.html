@@ -1418,6 +1418,10 @@ function vedenieFilterSt(st){
   vedenieSt=st;
   document.querySelectorAll('[id^="vsb-"]').forEach(b=>b.classList.remove('active'));
   document.getElementById('vsb-'+st)?.classList.add('active');
+  // Aktualizuj SUPTEL label v topbare aj sidebari
+  const lbl = st==='vsetky' ? 'SUPTEL' : `SUPTEL ${(STREDISKO_LABEL[st]||st).toUpperCase()}`;
+  document.getElementById('topbar-file').textContent = lbl;
+  document.getElementById('sb-sub').textContent = lbl;
   renderObjTable();
   updateDash();
   updateDiagInfo();
