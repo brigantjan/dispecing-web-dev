@@ -574,6 +574,14 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <button class="btn btn-green btn-xs" onclick="exportExcel()" title="Exportovať zobrazené záznamy do Excelu" style="padding:5px 12px;font-size:12px;font-weight:600;white-space:nowrap">📥 Export Excel</button>
       <button class="btn btn-outline btn-xs" onclick="zobrazNapovedu()" title="Nápoveda – klávesové skratky" style="padding:5px 10px;font-size:12px;white-space:nowrap">⌨ Skratky</button>
     </div>
+    <!-- Filter strediska – viditeľný len pre vedenie -->
+    <div id="vedenie-st-bar" style="display:none;padding:5px 10px;background:#f0f4ff;border-bottom:1px solid var(--border);align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
+      <span style="font-weight:600;color:var(--accent)">🏢 Stredisko:</span>
+      <div class="quick-btn active" id="vsb-vsetky" onclick="vedenieFilterSt('vsetky')">Všetky</div>
+      <div class="quick-btn" id="vsb-zilina"      onclick="vedenieFilterSt('zilina')">Žilina</div>
+      <div class="quick-btn" id="vsb-bratislava"  onclick="vedenieFilterSt('bratislava')">Bratislava</div>
+      <div class="quick-btn" id="vsb-trencin"     onclick="vedenieFilterSt('trencin')">Trenčín</div>
+    </div>
     <!-- Bulk action panel – zobrazí sa keď je niečo označené -->
     <div id="bulk-bar" style="display:none;background:#fff8e1;border-bottom:1px solid #ffca28;padding:6px 12px;align-items:center;gap:8px;font-size:12px">
       <span id="bulk-count" style="font-weight:700;color:#7b5300">0 označených</span>
@@ -998,6 +1006,7 @@ function apiToMock(o){
     vytvoreny: o.vytvoreny||'', // kedy bol záznam zapísaný do DB (poradie v "Posledné zapísané")
     cas_od:    o.cas_od||'',
     cas_do:    o.cas_do||'',
+    stredisko: o.stredisko||'zilina',
   };
 }
 
@@ -1399,7 +1408,14 @@ function bulkExportSelected(){
   finally{ hidden.forEach(([tr,prev])=>{ tr.style.display=prev||''; }); }
 }
 let quickMode='all';
+let vedenieSt='vsetky'; // filter strediska pre rolu vedenie
 let _sTimer=null;
+function vedenieFilterSt(st){
+  vedenieSt=st;
+  document.querySelectorAll('[id^="vsb-"]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('vsb-'+st)?.classList.add('active');
+  renderObjTable();
+}
 function quickFilter(mode){
   quickMode=mode;
   document.querySelectorAll('.quick-btn').forEach(b=>b.classList.remove('active'));
@@ -1574,9 +1590,10 @@ function doLogin(){
       document.getElementById('statusbar')?.setAttribute('style','display:none');
     } else if(user.rola==='vedenie'){
       document.body.removeAttribute('data-role');
-      // Vedenie: skryť tab Nová (0) a Mobil (5), začať na Objednávkach
+      // Vedenie: skryť tab Nová (0) a Mobil (5), začať na Objednávkach, zobraziť filter strediska
       document.getElementById('tb0')?.style.setProperty('display','none');
       document.getElementById('tb5')?.style.setProperty('display','none');
+      document.getElementById('vedenie-st-bar').style.display='flex';
     } else {
       document.body.removeAttribute('data-role');
     }
@@ -2961,6 +2978,10 @@ function renderObjTable(){
   const fpozn=normDiakr(document.getElementById('f-pozn').value||'');
 
   let rows=[...MOCK_OBJ];
+  // Filter strediska pre rolu vedenie
+  if(currentUser?.rola==='vedenie' && vedenieSt!=='vsetky'){
+    rows=rows.filter(o=>(o.stredisko||'zilina')===vedenieSt);
+  }
   // Default zoradenie: najstaršie hore, NAJNOVŠIE DOLE (chronologicky podľa prijatia).
   // Pri 10k+ riadkoch dispečérka vidí najnovšie po auto-scrolle na koniec
   // bez nutnosti listovať celý zoznam.
@@ -3414,8 +3435,8 @@ let editCurrentId=null,editOrigPlan=null,editOrigRez=0,editOrigObj=null;
 function otvorEditModal(id_obj){
   const o=MOCK_OBJ.find(x=>x.id_obj===id_obj);if(!o)return;
   const rola=currentUser?.rola||'dispečér';
-  // Operátor – žiadna editácia
-  if(rola==='operátor')return;
+  // Operátor a vedenie – žiadna editácia
+  if(rola==='operátor'||rola==='vedenie')return;
   editCurrentId=id_obj;editOrigPlan=o.plan||null;
   const rm=o.pozn.match(/REZ\s*(\d{1,2})/);editOrigRez=rm?parseInt(rm[1]):0;
   // Snapshot pre diff histórie
