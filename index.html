@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DISPECING">
-<title>DISPECING – SUPTEL ŽILINA</title>
+<title>DISPECING – SUPTEL</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -350,7 +350,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 <!-- ═══════════════ LOGIN ═══════════════ -->
 <div id="login-screen">
 <div class="lcard">
-  <div class="llogo"><div class="lt">DISPECING</div><div class="ls">SUPTEL ŽILINA · Správa zriaďovacích objednávok</div></div>
+  <div class="llogo"><div class="lt">DISPECING</div><div class="ls">SUPTEL · Správa zriaďovacích objednávok</div></div>
   <div class="fg"><label>Email</label><input type="email" id="l-email" placeholder="email@suptel.sk" autocomplete="off"></div>
   <div class="fg"><label>Heslo</label><input type="password" id="l-pass" placeholder="Heslo" autocomplete="off"></div>
   <button class="btnp" onclick="doLogin()">Prihlásiť sa</button>
@@ -361,7 +361,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 <div id="app">
 <!-- SIDEBAR -->
 <div class="sidebar">
-  <div class="sidebar-brand"><div class="sb-logo">DISPECING</div><div class="sb-sub">SUPTEL ŽILINA</div></div>
+  <div class="sidebar-brand"><div class="sb-logo">DISPECING</div><div class="sb-sub" id="sb-sub">SUPTEL</div></div>
   <div class="sidebar-nav">
     <div class="sb-nav-lbl">Navigácia</div>
     <div class="sb-nav-item active" id="snav0" onclick="switchTab(0)"><span class="icon">➕</span>Nová objednávka</div>
@@ -382,7 +382,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <!-- TOPBAR -->
   <div class="topbar" style="position:relative">
     <div class="topbar-title">DISPECING <span style="font-weight:300;font-size:12px;opacity:.8">· Zriaďovanie</span></div>
-    <div class="topbar-file" id="topbar-file">SUPTEL ŽILINA</div>
+    <div class="topbar-file" id="topbar-file">SUPTEL</div>
     <!-- Diagnostika (admin/dispečér) – stav DB -->
     <div id="diag-info" style="font-size:11px;color:rgba(255,255,255,.85);font-family:var(--mono);padding:0 8px;display:none" title="Stav databázy"></div>
     <div class="tsep"></div>
@@ -1560,7 +1560,10 @@ function doLogin(){
     document.getElementById('uname').textContent=user.meno;
     document.getElementById('urola').textContent=user.rola;
     const STREDISKO_LABEL={'zilina':'Žilina','bratislava':'Bratislava','trencin':'Trenčín'};
-    document.getElementById('ustredisko').textContent=STREDISKO_LABEL[user.stredisko]||user.stredisko;
+    const stLabel = STREDISKO_LABEL[user.stredisko] || user.stredisko;
+    document.getElementById('ustredisko').textContent = stLabel;
+    document.getElementById('sb-sub').textContent = `SUPTEL ${stLabel.toUpperCase()}`;
+    document.getElementById('topbar-file').textContent = `SUPTEL ${stLabel.toUpperCase()}`;
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').classList.add('visible');
 
