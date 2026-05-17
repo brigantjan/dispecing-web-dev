@@ -3460,6 +3460,23 @@ function saveEdit(){
   }
   toast(`✓ Uložené: ${editCurrentId}`);setStatus(`✓ Zmenené: ${editCurrentId}`,'ok');
   closeEdit();afterEditRefresh();
+  // Email technikovi cez Outlook (mailto:) ak sa zmenil technik a má zapnuté notifikácie
+  if(o.zdroj && (editOrigObj?.zdroj||'')!==o.zdroj){
+    const _tech=DEMO_USERS.find(u=>u.technik_meno===o.zdroj&&u.technik_email_notify&&u.technik_email);
+    if(_tech){
+      const _planFmt=o.plan?fmtD(o.plan):'–';
+      const _casText=o.cas_od?` a časovým oknom ${o.cas_od} – ${o.cas_do}`:'';
+      const _subj=`Pridelená objednávka: ${o.meno} – ${o.adresa}`;
+      const _body=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_planFmt}${_casText}.\n\nZákazník: ${o.meno}\nAdresa: ${o.adresa}\nTyp: ${o.typ} | Balík: ${o.balik}\nLT: ${o.lt||'–'}\n\nDISPECING SUPTEL`;
+      const _a=document.createElement('a');
+      _a.href=`mailto:${_tech.technik_email}?subject=${encodeURIComponent(_subj)}&body=${encodeURIComponent(_body)}`;
+      _a.style.display='none';
+      document.body.appendChild(_a);
+      _a.click();
+      setTimeout(()=>_a.parentNode&&_a.parentNode.removeChild(_a),1000);
+      toast(`📧 Email pre ${_tech.technik_meno} odoslaný do Outlooku`);
+    }
+  }
   // ── Granulárne logovanie histórie ──────────────────────────
   if(farba==='zelena'){
     logHistoria(editCurrentId,'uzavretie',`Uzavretie: realizácia ${o.real||T}`);
