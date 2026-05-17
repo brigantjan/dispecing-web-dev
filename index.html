@@ -3890,10 +3890,10 @@ function renderUserTable(){
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:6px 8px;background:${u.technik_email_notify?'#eff6ff':'transparent'};border:1px solid ${u.technik_email_notify?'#93c5fd':'transparent'};border-radius:5px">
           <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;white-space:nowrap;font-weight:${u.technik_email_notify?'600':'400'}">
-            <input type="checkbox" ${u.technik_email_notify?'checked':''} onchange="updateUser(${idx},'technik_email_notify',this.checked?1:0);renderUserTable()" style="margin:0">
+            <input type="checkbox" ${u.technik_email_notify?'checked':''} onchange="updateUser(${idx},'technik_email_notify',this.checked?1:0);const _ei=document.getElementById('te-inp-${idx}');if(_ei)_ei.style.background=this.checked?'#fff':'#f9fafb';" style="margin:0">
             ✉️ <span>Zasielať emaily objednávok</span>
           </label>
-          <input type="email" value="${u.technik_email||''}" onchange="updateUser(${idx},'technik_email',this.value)" placeholder="email technika..." style="flex:1;padding:4px 8px;border:1px solid var(--border2);border-radius:5px;font-size:12px;background:${u.technik_email_notify?'#fff':'#f9fafb'}">
+          <input id="te-inp-${idx}" type="email" value="${u.technik_email||''}" onblur="updateUser(${idx},'technik_email',this.value)" placeholder="email technika..." style="flex:1;padding:4px 8px;border:1px solid var(--border2);border-radius:5px;font-size:12px;background:${u.technik_email_notify?'#fff':'#f9fafb'}">
         </div>
       </td>
     </tr>`:`<tr style="background:#f8f9fc"><td colspan="6" style="padding:2px 12px 5px;font-size:11px;color:var(--muted)"><span class="role-badge role-${u.rola}">${u.rola}</span></td></tr>`}
