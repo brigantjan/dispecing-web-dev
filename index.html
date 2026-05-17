@@ -474,11 +474,15 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <div class="field"><label>LT</label>
             <input type="date" id="n-lt" onblur="aiTrigger()" onchange="aiTrigger()"></div>
         </div>
-        <div class="row3">
-          <div class="field"><label>ADD</label>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px">
+          <div class="field" style="flex:0 0 58px"><label>ADD</label>
             <input type="text" id="n-add" placeholder="A" style="text-transform:uppercase" maxlength="2" oninput="onAddInput(this)"></div>
-          <div class="field" style="grid-column:span 2"><label>Plánovaný dátum</label>
+          <div class="field" style="flex:1;min-width:110px"><label>Plánovaný dátum</label>
             <input type="date" id="n-plan"></div>
+          <div class="field" style="flex:0 0 108px"><label>Od</label>
+            <select id="n-cas-od" onchange="onCasOdChange('n')"></select></div>
+          <div class="field" style="flex:0 0 88px"><label>Do</label>
+            <input type="text" id="n-cas-do" readonly placeholder="auto" style="background:#f3f4f6;color:#555;cursor:default"></div>
         </div>
         <div class="field"><label>Pracovný zdroj</label>
           <input type="text" id="n-technik" list="dl-technik" placeholder="Vyberte alebo napíšte..." onblur="this.value=this.value.trim()" autocomplete="off">
@@ -900,9 +904,11 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="mfield" style="padding:0"><label>Dátum prijatia</label><input type="date" id="e-prijatia"></div>
       <div class="mfield" style="padding:0"><label>LT</label><input type="date" id="e-lt"></div>
     </div>
-    <div class="mrow-tiny">
+    <div style="display:grid;grid-template-columns:70px 1fr 108px 88px;gap:8px;padding:3px 18px">
       <div class="mfield" style="padding:0"><label>ADD</label><input type="text" id="e-add" style="text-transform:uppercase" maxlength="2"></div>
       <div class="mfield" style="padding:0"><label>Plánovaný dátum</label><input type="date" id="e-plan"></div>
+      <div class="mfield" style="padding:0"><label>Od</label><select id="e-cas-od" onchange="onCasOdChange('e')"></select></div>
+      <div class="mfield" style="padding:0"><label>Do</label><input type="text" id="e-cas-do" readonly placeholder="auto" style="background:#f3f4f6;color:#555;cursor:default"></div>
     </div>
     <div class="mfield"><label>Pracovný zdroj</label><input type="text" id="e-technik" list="dl-technik" autocomplete="off"></div>
     <div class="mfield"><label>Telefón zákazníka</label>
@@ -990,6 +996,8 @@ function apiToMock(o){
     telefon:   o.telefon||'',     // pre tlačidlo Zavolaj
     zmeneny:   o.zmeneny||now8(),
     vytvoreny: o.vytvoreny||'', // kedy bol záznam zapísaný do DB (poradie v "Posledné zapísané")
+    cas_od:    o.cas_od||'',
+    cas_do:    o.cas_do||'',
   };
 }
 
@@ -1010,6 +1018,8 @@ function mockToApi(o){
     poznamky:         o.pozn||'',
     farba:            o.farba||'',
     telefon:          o.telefon||'',
+    cas_od:           o.cas_od||null,
+    cas_do:           o.cas_do||null,
   };
 }
 
@@ -1713,6 +1723,7 @@ function fillMobTechnik(){
 function initApp(){
   const rola=currentUser?.rola||'dispečér';
   document.getElementById('n-prijatia').value=T;
+  _casOdSel('n'); _casOdSel('e'); // inicializuj časové selecty
   document.getElementById('p-datum').value=T;  // defaultne dnes
   document.getElementById('mob-datum').value=T;
   document.getElementById('cap-from').value=T;
@@ -2591,6 +2602,9 @@ function zapisObjednavku(){
   if(add_txt==='A'&&plan&&lt&&plan>lt&&currentStavNova!=='hotova'&&currentStavNova!=='storno'){
     farba='modra';pozn=`REZ01, z ${fmtRezD(lt)} na ${fmtRezD(plan)}`;
   }
+  _casOdSel('n');
+  const nCasOd=(document.getElementById('n-cas-od')||{}).value||'';
+  const nCasDo=(document.getElementById('n-cas-do')||{}).value||'';
   const novyZaznam={
     id_obj:idObj, meno:document.getElementById('n-meno').value.trim(),
     adresa:document.getElementById('n-adresa').value.trim(),
@@ -2601,8 +2615,13 @@ function zapisObjednavku(){
     zdroj:document.getElementById('n-technik').value.trim(),
     add_txt, pozn, farba,
     telefon:document.getElementById('n-telefon').value.trim(),
-    zmeneny:now8(),
+    zmeneny:now8(), cas_od:nCasOd, cas_do:nCasDo,
   };
+  // Upozornenie na prekrývajúce sa časové okno
+  if(nCasOd&&novyZaznam.zdroj&&novyZaznam.plan){
+    const k=checkCasOverlap(novyZaznam.zdroj,novyZaznam.plan,nCasOd,nCasDo,null);
+    if(k) toast(`⚠ Prekryv: ${novyZaznam.zdroj} má ${k.cas_od}–${k.cas_do} (${k.id_obj})`);
+  }
   // Lokálne pridaj okamžite
   if(dup){const i=MOCK_OBJ.findIndex(o=>o.id_obj.toUpperCase()===idObj);if(i>=0)MOCK_OBJ[i]=novyZaznam;}
   else MOCK_OBJ.push(novyZaznam);
@@ -2624,6 +2643,8 @@ function zapisObjednavku(){
 function vymazatFormu(){
   ['n-id','n-meno','n-adresa','n-typ','n-balik','n-add','n-pozn','n-technik','n-telefon'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList&&el.classList.remove('add-a');}});
   ['n-lt','n-plan','n-real'].forEach(id=>document.getElementById(id).value='');
+  const nOd=document.getElementById('n-cas-od');if(nOd)nOd.value='';
+  const nDo=document.getElementById('n-cas-do');if(nDo)nDo.value='';
   document.getElementById('n-prijatia').value=T;
   document.querySelectorAll('#n-stav-opts .stav-opt').forEach(o=>o.className='stav-opt');
   currentStavNova='';aiDone=false;pendingDup=null;
@@ -2762,7 +2783,7 @@ function renderCapTbl(f,t){
   const wrap=document.getElementById('cap-wrap');
   const dates=getDates(f,t);
   const grid={};
-  MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj)return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];if(o.adresa)grid[o.zdroj][o.plan].push(o.adresa);});
+  MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj)return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const tipItem=o.cas_od?`${o.adresa||''} ${o.cas_od}–${o.cas_do}`:(o.adresa||'');if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
   // Zobrazujeme LEN technikov ktorí majú aspoň jednu objednávku v zobrazenom rozsahu.
   // Pôvodne sa tu pridávali aj prázdne riadky pre VŠETKÝCH z TECHNICI – to spôsobovalo
   // zobrazenie testovacích/neexistujúcich technikov ako "Nový používateľ" s prázdnym riadkom.
@@ -3378,6 +3399,10 @@ function otvorEditModal(id_obj){
   document.getElementById('e-lt').value=o.lt||'';
   document.getElementById('e-add').value=o.add_txt||'';
   document.getElementById('e-plan').value=o.plan||'';
+  _casOdSel('e');
+  const eOd=document.getElementById('e-cas-od');
+  if(eOd)eOd.value=o.cas_od||'';
+  document.getElementById('e-cas-do').value=o.cas_do||'';
   document.getElementById('e-technik').value=o.zdroj||'';
   document.getElementById('e-pozn').value=o.pozn||'';
   document.getElementById('e-telefon').value=o.telefon||'';
@@ -3424,6 +3449,13 @@ function saveEdit(){
   o.plan=plan;o.zdroj=document.getElementById('e-technik').value;o.pozn=pozn;
   o.telefon=document.getElementById('e-telefon').value.trim();
   o.real=document.getElementById('e-real').value;o.farba=farba;o.zmeneny=now8();
+  o.cas_od=document.getElementById('e-cas-od')?.value||'';
+  o.cas_do=document.getElementById('e-cas-do')?.value||'';
+  // Upozornenie na prekrývajúce sa časové okno
+  if(o.cas_od&&o.zdroj&&o.plan){
+    const k=checkCasOverlap(o.zdroj,o.plan,o.cas_od,o.cas_do,editCurrentId);
+    if(k) toast(`⚠ Prekryv: ${o.zdroj} má ${k.cas_od}–${k.cas_do} (${k.id_obj})`);
+  }
   toast(`✓ Uložené: ${editCurrentId}`);setStatus(`✓ Zmenené: ${editCurrentId}`,'ok');
   closeEdit();afterEditRefresh();
   // ── Granulárne logovanie histórie ──────────────────────────
@@ -4427,7 +4459,35 @@ function vykonatHromadnaZmena(){
 }
 
 // ════════════════════════════════════════════════════════════
-// ── Denný sumár ─────────────────────────────────────────────
+// ── Časové okno realizácie (cas_od / cas_do) ─────────────────
+const CAS_OD_OPTS='<option value="">—</option>'+
+  ['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30',
+   '10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30',
+   '14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00']
+  .map(t=>`<option value="${t}">${t}</option>`).join('');
+
+function addTwoHours(t){
+  if(!t)return '';
+  const[h,m]=t.split(':').map(Number);
+  const tot=h*60+m+120;
+  return `${String(Math.floor(tot/60)).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`;
+}
+function onCasOdChange(prefix){
+  const od=(document.getElementById(prefix+'-cas-od')||{}).value||'';
+  const doFld=document.getElementById(prefix+'-cas-do');
+  if(doFld)doFld.value=od?addTwoHours(od):'';
+}
+function checkCasOverlap(technik,plan,casOd,casDo,excludeId){
+  if(!casOd||!technik||!plan)return null;
+  return MOCK_OBJ.find(o=>
+    o.id_obj!==excludeId&&o.zdroj===technik&&o.plan===plan&&
+    o.cas_od&&o.cas_do&&o.cas_od<casDo&&casOd<o.cas_do
+  )||null;
+}
+function _casOdSel(prefix){
+  const s=document.getElementById(prefix+'-cas-od');
+  if(s&&!s.innerHTML)s.innerHTML=CAS_OD_OPTS;
+}
 const _DS_AKCIA={zapis:'Zápis',zmena:'Zmena',uzavretie:'Uzavretie',storno:'Storno',prerezerv:'Prerezervácia',email:'Email',poznamka:'Poznámka'};
 const _DS_COLOR={zapis:'#dcfce7',zmena:'#f1f5f9',uzavretie:'#bbf7d0',storno:'#fef9c3',prerezerv:'#dbeafe',email:'#f3e8ff',poznamka:'#fff'};
 
