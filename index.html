@@ -3972,8 +3972,13 @@ function updateUser(idx,field,val){
     DEMO_USERS[idx][field]=s;
     payload[field]=s;
   }
-  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky'].includes(field))
+  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email'].includes(field))
     payload[field]=val;
+  else if(field==='technik_email_notify'){
+    const iv=(val===1||val==='1'||val===true)?1:0;
+    DEMO_USERS[idx].technik_email_notify=iv;
+    payload[field]=iv;
+  }
   else return; // neznáme pole
   // Ak sme automaticky doplnili technik_meno, pošleme ho do API spolu s rolou
   if(autoTechMeno) payload.technik_meno=autoTechMeno;
