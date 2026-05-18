@@ -251,7 +251,7 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .imap-section h4{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px}
 .imap-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 /* ─── ROLE CSS – riadené JS (applyRole) ───────────────────── */
-/* ─── TECHNIK MOBILNÝ MÓD ─────────────────────────────────── */
+@keyframes spin{to{transform:rotate(360deg)}}
 .hide-shell{display:none!important}
 body[data-role="technik"] .sidebar,
 body[data-role="technik"] .tabbar,
@@ -353,6 +353,11 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 </head>
 <body>
 <!-- ═══════════════ LOGIN ═══════════════ -->
+<!-- App loading overlay -->
+<div id="app-loader" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(248,250,252,.95);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px">
+  <div style="width:38px;height:38px;border:4px solid #e2e8f0;border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite"></div>
+  <div id="app-loader-text" style="color:var(--muted);font-size:13px;font-weight:500">Načítavam dáta…</div>
+</div>
 <div id="login-screen">
 <div class="lcard">
   <div class="llogo"><div class="lt">DISPECING</div><div class="ls">SUPTEL · Správa zriaďovacích objednávok</div></div>
@@ -740,7 +745,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <table class="user-tbl" id="user-tbl">
         <thead><tr>
           <th>Meno</th><th>Email (login)</th><th>Heslo</th><th>Rola</th>
-          <th>Meno technika (pre mobil)</th><th>Stredisko</th><th style="width:60px">Akcie</th>
+          <th>Meno technika (pre mobil)</th><th style="width:90px">Stredisko</th><th style="width:60px">Akcie</th>
         </tr></thead>
         <tbody id="user-tbody"></tbody>
       </table>
@@ -1606,16 +1611,20 @@ function doLogin(){
     document.getElementById('ustredisko').textContent = stLabel;
     document.getElementById('sb-sub').textContent = `SUPTEL ${stLabel.toUpperCase()}`;
     document.getElementById('topbar-file').textContent = `SUPTEL ${stLabel.toUpperCase()}`;
+    // Nastav rolu na body PRED zobrazením app – CSS okamžite skryje správne prvky
+    document.body.setAttribute('data-role', user.rola==='technik'?'technik':user.rola==='vedenie'?'vedenie':'');
+
     document.getElementById('login-screen').style.display='none';
+    // Zobraz loading overlay (skryje prázdnu app počas načítavania dát)
+    const appLoader=document.getElementById('app-loader');
+    if(appLoader) appLoader.style.display='flex';
     document.getElementById('app').classList.add('visible');
 
     if(user.rola==='technik'){
-      document.body.setAttribute('data-role','technik');
       document.querySelector('.sidebar')?.setAttribute('style','display:none');
       document.querySelector('.tabbar')?.setAttribute('style','display:none');
       document.getElementById('statusbar')?.setAttribute('style','display:none');
     } else if(user.rola==='vedenie'){
-      document.body.setAttribute('data-role','vedenie');
       // Vedenie: skryť tab Nová (0) a Mobil (5), začať na Objednávkach, zobraziť filter strediska
       document.getElementById('tb0')?.style.setProperty('display','none');
       document.getElementById('tb5')?.style.setProperty('display','none');
@@ -1626,18 +1635,22 @@ function doLogin(){
       document.getElementById('btn-generuj-email')?.style.setProperty('display','none');
       document.getElementById('vedenie-st-bar').style.display='flex';
     } else {
-      document.body.removeAttribute('data-role');
+      // admin / dispečér / operátor – data-role je '' (nastavené vyššie)
     }
 
     applyRole(user);
-    // Načítaj dáta z API
+    // Načítaj dáta z API (loader je viditeľný počas celého tohto bloku)
+    document.getElementById('app-loader-text').textContent='Načítavam objednávky…';
     await loadObjednavky();
     await loadNotifikacie();
+    document.getElementById('app-loader-text').textContent='Načítavam technikov…';
     await loadTechnici();
     await loadTechniciDetail();
     if(user.rola==='admin'||user.rola==='vedenie') await loadUsers();
     initApp();
     startPolling();
+    // Skry loader – dáta sú načítané, UI je pripravené
+    if(appLoader) appLoader.style.display='none';
     setStatus(`Prihlásený: ${user.meno} (${user.rola})`,'ok');
   }).catch(e=>{
     err.textContent=e.message||'Nesprávny email alebo heslo.';
@@ -3968,10 +3981,8 @@ function renderUserTable(){
       <td>
         ${u.rola==='technik'?`<input type="text" list="dl-tech-uzers" value="${(u.technik_meno||'').replace(/"/g,'&quot;')}" onchange="updateUser(${idx},'technik_meno',this.value)" placeholder="napr. Poštulka Róbert" style="width:100%;padding:5px 8px;border:1px solid var(--border2);border-radius:5px">`:'<span style="color:var(--muted);font-size:11px">–</span>'}
       </td>
-      <td>
-        <select onchange="updateUser(${idx},'stredisko',this.value)" style="min-width:90px">
-          ${STREDISKO_OPTIONS.map(s=>`<option value="${s}"${s===u.stredisko?' selected':''}>${STREDISKO_LABEL[s]||s}</option>`).join('')}
-        </select>
+      <td style="text-align:center">
+        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--accent-light,#e8f0fe);color:var(--accent)">${STREDISKO_LABEL[u.stredisko||'zilina']||u.stredisko||'Žilina'}</span>
       </td>
       <td><button class="btn btn-red btn-xs" onclick="vymazUser(${idx})" title="Vymazať"${u.email===currentUser?.email?' disabled style="opacity:.4;cursor:not-allowed"':''}>🗑</button></td>
     </tr>
