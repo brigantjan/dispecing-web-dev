@@ -572,7 +572,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <button id="btn-denny-sumar" class="btn btn-outline btn-xs" onclick="showDennySumar()" style="padding:5px 10px;font-size:12px;white-space:nowrap;display:none">📑 Denný sumár</button>
       <button class="btn btn-outline btn-xs" onclick="exportMesacnyVykaz()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📋 Mesačný výkaz</button>
       <button class="btn btn-green btn-xs" onclick="exportExcel()" title="Exportovať zobrazené záznamy do Excelu" style="padding:5px 12px;font-size:12px;font-weight:600;white-space:nowrap">📥 Export Excel</button>
-      <button class="btn btn-outline btn-xs" onclick="zobrazNapovedu()" title="Nápoveda – klávesové skratky" style="padding:5px 10px;font-size:12px;white-space:nowrap">⌨ Skratky</button>
+      <button id="btn-skratky" class="btn btn-outline btn-xs" onclick="zobrazNapovedu()" title="Nápoveda – klávesové skratky" style="padding:5px 10px;font-size:12px;white-space:nowrap">⌨ Skratky</button>
     </div>
     <!-- Filter strediska – viditeľný len pre vedenie -->
     <div id="vedenie-st-bar" style="display:none;padding:5px 10px;background:#f0f4ff;border-bottom:1px solid var(--border);align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
@@ -647,7 +647,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <span style="font-size:12px;color:var(--muted)">Dátum:</span>
       <input type="date" id="p-datum" onchange="showPlan()" style="border:1px solid var(--border2);border-radius:5px;padding:5px 9px;color:var(--text);background:#fff;outline:none">
       <span class="sum-lbl" id="p-sum"></span>
-      <button class="btn btn-outline" onclick="otvorHromadnaZmena()" style="margin-left:auto;font-size:12px" title="Hromadná zmena technika pre vybraný deň">⇄ Hromadná zmena technika</button>
+      <button id="btn-hromadna-zmena" class="btn btn-outline" onclick="otvorHromadnaZmena()" style="margin-left:auto;font-size:12px" title="Hromadná zmena technika pre vybraný deň">⇄ Hromadná zmena technika</button>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" id="p-tbl">
@@ -687,7 +687,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <div class="tab-page" id="page3" style="flex-direction:column">
     <div class="ctrl-bar">
       <button class="btn btn-accent" onclick="showPrerezerv()">↻ Obnoviť</button>
-      <button class="btn btn-red" onclick="emailPrerezerv()">📧 Generuj email pre označené</button>
+      <button id="btn-generuj-email" class="btn btn-red" onclick="emailPrerezerv()">📧 Generuj email pre označené</button>
       <span class="sum-lbl" id="pr-sum"></span>
     </div>
     <div class="tbl-wrap">
@@ -1428,7 +1428,7 @@ function vedenieFilterSt(st){
 }
 function quickFilter(mode){
   quickMode=mode;
-  document.querySelectorAll('.quick-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('[id^="qb-"]').forEach(b=>b.classList.remove('active'));
   const btn=document.getElementById('qb-'+mode);
   if(btn) btn.classList.add('active');
   // Vždy resetuj modálny datumFilter (z Po-LT badge alebo dátum-filter modal).
@@ -1462,7 +1462,7 @@ function dashClickFilter(mode){
   // Potom prepni quick mód na požadovaný typ
   if(mode!=='all'){
     quickMode=mode;
-    document.querySelectorAll('.quick-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('[id^="qb-"]').forEach(b=>b.classList.remove('active'));
     const btn=document.getElementById('qb-'+mode);
     if(btn) btn.classList.add('active');
     renderObjTable();
@@ -1491,7 +1491,7 @@ function quickFilterPoLt(){
   quickFilter('all'); // úplný reset
   // Teraz nastav 'neukoncene' bez prerenderu (urobíme jeden render až po datumFilter)
   quickMode='neukoncene';
-  document.querySelectorAll('.quick-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('[id^="qb-"]').forEach(b=>b.classList.remove('active'));
   const btn=document.getElementById('qb-neukoncene');
   if(btn) btn.classList.add('active');
   // Aplikuj rozšírený dátumový filter: LT do včerajška vrátane
@@ -1610,6 +1610,11 @@ function doLogin(){
       // Vedenie: skryť tab Nová (0) a Mobil (5), začať na Objednávkach, zobraziť filter strediska
       document.getElementById('tb0')?.style.setProperty('display','none');
       document.getElementById('tb5')?.style.setProperty('display','none');
+      document.getElementById('snav0')?.style.setProperty('display','none');
+      document.getElementById('snav5')?.style.setProperty('display','none');
+      document.getElementById('btn-skratky')?.style.setProperty('display','none');
+      document.getElementById('btn-hromadna-zmena')?.style.setProperty('display','none');
+      document.getElementById('btn-generuj-email')?.style.setProperty('display','none');
       document.getElementById('vedenie-st-bar').style.display='flex';
     } else {
       document.body.removeAttribute('data-role');
@@ -3113,7 +3118,9 @@ function renderObjTable(){
 function showPlan(){
   const datum=document.getElementById('p-datum').value||T;
   document.getElementById('p-datum').value=datum;
-  const rows=MOCK_OBJ.filter(o=>o.plan===datum).sort((a,b)=>(a.zdroj||'').localeCompare(b.zdroj||''));
+  const stFilter=(currentUser?.rola==='vedenie'&&vedenieSt!=='vsetky')?vedenieSt:null;
+  const src=stFilter?MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===stFilter):MOCK_OBJ;
+  const rows=src.filter(o=>o.plan===datum).sort((a,b)=>(a.zdroj||'').localeCompare(b.zdroj||''));
   const tc={};rows.forEach(o=>{tc[o.zdroj||'–']=(tc[o.zdroj||'–']||0)+1;});
   const sum=`Celkom: ${rows.length}${Object.entries(tc).map(([t,n])=>` | ${t}: ${n}`).join('')}`;
   document.getElementById('p-sum').textContent=sum;
@@ -3133,9 +3140,9 @@ function showPlan(){
 let prChecked=new Set();
 function showPrerezerv(){
   prChecked.clear();
-  // Zobrazí VŠETKY prerezerv. objednávky (farba=modra) bez realizácie
-  // Podmienka plan>lt nie je povinná - stačí farba=modra (dispečér ju nastavil manuálne)
-  const rows=MOCK_OBJ.filter(o=>
+  const stFilter=(currentUser?.rola==='vedenie'&&vedenieSt!=='vsetky')?vedenieSt:null;
+  const src=stFilter?MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===stFilter):MOCK_OBJ;
+  const rows=src.filter(o=>
     o.farba==='modra'&&!o.real&&o.farba!=='zlta'
   ).sort((a,b)=>(a.plan||'').localeCompare(b.plan||''));
   document.getElementById('pr-sum').textContent=`Pre-rezervácií: ${rows.length}`;
@@ -3277,7 +3284,9 @@ function emailPrerezerv(){
 // TAB 4: NENAPLÁNOVANÉ
 // ════════════════════════════════════════════════════════════
 function showNeplan(){
-  const rows=MOCK_OBJ.filter(isNeplan);
+  const stFilter=(currentUser?.rola==='vedenie'&&vedenieSt!=='vsetky')?vedenieSt:null;
+  const src=stFilter?MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===stFilter):MOCK_OBJ;
+  const rows=src.filter(isNeplan);
   document.getElementById('np-sum').textContent=`Nenaplánovaných: ${rows.length}`;
   document.getElementById('np-tbody').innerHTML=rows.map(o=>`
     <tr class="tr-red" ondblclick="otvorEditModal('${o.id_obj}')">
@@ -4729,10 +4738,12 @@ async function zobrazHistoriu(id_obj){
 // ZMENA 4+5: MESAČNÝ VÝKAZ + ŠTATISTIKY (záložka Nenaplánované → tlačidlá)
 // ════════════════════════════════════════════════════════════
 function exportMesacnyVykaz(){
-  // Technici – 4 zdroje (rovnako ako fillMobTechnik) aby sme videli VŠETKÝCH evidovaných
-  const fromUsers=(DEMO_USERS||[]).filter(u=>u.rola==='technik').map(u=>u.technik_meno||u.meno).filter(Boolean);
-  const fromMockAll=[...new Set(MOCK_OBJ.map(o=>o.zdroj).filter(Boolean))];
-  const all=[...new Set([...(TECHNICI||[]),...fromUsers,...fromMockAll])].sort();
+  // Technici – filtruj podľa strediska pre vedenie
+  const stFilter=(currentUser?.rola==='vedenie'&&vedenieSt!=='vsetky')?vedenieSt:null;
+  const fromUsers=(DEMO_USERS||[]).filter(u=>u.rola==='technik'&&(!stFilter||(u.stredisko||'zilina')===stFilter)).map(u=>u.technik_meno||u.meno).filter(Boolean);
+  const srcData=stFilter?MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===stFilter):MOCK_OBJ;
+  const fromMockAll=[...new Set(srcData.map(o=>o.zdroj).filter(Boolean))];
+  const all=[...new Set([...(stFilter?[]:TECHNICI||[]),...fromUsers,...fromMockAll])].sort();
   const techHTML='<option value="">– Všetci technici –</option>'+all.map(t=>`<option>${t}</option>`).join('');
   // Roky – dynamicky z dostupných objednávok + aktuálny rok pre istotu
   const aktRok=String(new Date().getFullYear());
@@ -4757,7 +4768,7 @@ function exportMesacnyVykaz(){
     const t=document.getElementById('mv-tech').value;
     const r=document.getElementById('mv-rok').value;
     const m=document.getElementById('mv-mes').value;
-    const cnt=MOCK_OBJ.filter(o=>{
+    const cnt=srcData.filter(o=>{
       const d=(o.plan||o.prijatia||'');
       if(d.slice(0,4)!==r) return false;
       if(d.slice(5,7)!==m) return false;
