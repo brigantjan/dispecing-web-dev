@@ -258,6 +258,11 @@ body[data-role="technik"] .tabbar,
 body[data-role="technik"] #statusbar,
 body[data-role="technik"] .dash-section,
 body[data-role="technik"] #notif-btn { display:none!important }
+/* ─── VEDENIE – skryť Nová a Mobil ──────────────────────── */
+body[data-role="vedenie"] #tb0,
+body[data-role="vedenie"] #tb5,
+body[data-role="vedenie"] #snav0,
+body[data-role="vedenie"] #snav5 { display:none!important }
 /* Mobile dropdown – rozbalené <option> musia mať tmavý text na bielom pozadí.
    Inak sa color:#fff zo selectu prenesie aj do options a v rozbalenom popupe
    (ktoré je biele) sú mená neviditeľné kým nie sú highlighted. */
@@ -1425,6 +1430,7 @@ function vedenieFilterSt(st){
   renderObjTable();
   updateDash();
   updateDiagInfo();
+  updatePoLtBadge();
 }
 function quickFilter(mode){
   quickMode=mode;
@@ -1477,7 +1483,10 @@ function updatePoLtBadge(){
   const badge=document.getElementById('polt-badge');
   if(!badge) return;
   if(currentUser?.rola==='technik'){badge.classList.remove('visible');return;}
-  const cnt=MOCK_OBJ.filter(isPoLt).length;
+  const src=(currentUser?.rola==='vedenie'&&vedenieSt!=='vsetky')
+    ? MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===vedenieSt)
+    : MOCK_OBJ;
+  const cnt=src.filter(isPoLt).length;
   document.getElementById('polt-count').textContent=cnt;
   if(cnt>0) badge.classList.add('visible');
   else      badge.classList.remove('visible');
@@ -1606,7 +1615,7 @@ function doLogin(){
       document.querySelector('.tabbar')?.setAttribute('style','display:none');
       document.getElementById('statusbar')?.setAttribute('style','display:none');
     } else if(user.rola==='vedenie'){
-      document.body.removeAttribute('data-role');
+      document.body.setAttribute('data-role','vedenie');
       // Vedenie: skryť tab Nová (0) a Mobil (5), začať na Objednávkach, zobraziť filter strediska
       document.getElementById('tb0')?.style.setProperty('display','none');
       document.getElementById('tb5')?.style.setProperty('display','none');
