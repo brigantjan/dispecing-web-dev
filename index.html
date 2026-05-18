@@ -1724,6 +1724,9 @@ function doLogout(){
   document.getElementById('login-screen')?.removeAttribute('style');
   // Reset MWF fronty
   mwfQueue=[];
+  // Reload stránky – zaručí čistý stav globálnych premenných (TECHNICI, DEMO_USERS, MOCK_OBJ)
+  // pri prihlásení iného používateľa / iného strediska
+  setTimeout(()=>location.reload(true), 300);
 }
 
 // ════════════════════════════════════════════════════════════
