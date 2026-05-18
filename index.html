@@ -5200,5 +5200,43 @@ document.addEventListener('keydown',e=>{
     return;
   }
 });
+// ════════════════════════════════════════════════════════════
+// AUTO VERSION CHECK – pri zmene index.html na serveri auto-reload
+// Používa HEAD request (cache: no-store) a porovnáva ETag / Last-Modified
+// ════════════════════════════════════════════════════════════
+let _versionEtag = null;
+let _versionReloadPending = false;
+
+async function checkPageVersion() {
+  if (_versionReloadPending) return;
+  try {
+    const r = await fetch(location.href, { method: 'HEAD', cache: 'no-store' });
+    const etag = r.headers.get('ETag') || r.headers.get('Last-Modified') || null;
+    if (!etag) return; // server nepodporuje ETag – nič nerob
+    if (_versionEtag === null) {
+      _versionEtag = etag; // prvé načítanie – ulož referenciu
+      return;
+    }
+    if (etag !== _versionEtag) {
+      _versionReloadPending = true;
+      _versionEtag = etag;
+      // Toast s odpočítavaním
+      let sec = 10;
+      const id = setInterval(() => {
+        sec--;
+        toast(`🔄 Dostupná nová verzia DISPECING – obnova za ${sec}s`, 'info');
+        if (sec <= 0) {
+          clearInterval(id);
+          location.reload(true);
+        }
+      }, 1000);
+      toast(`🔄 Dostupná nová verzia DISPECING – obnova za ${sec}s`, 'info');
+    }
+  } catch (e) { /* sieť nedostupná – preskočiť */ }
+}
+
+// Prvá kontrola 10s po načítaní stránky, potom každých 5 minút
+setTimeout(checkPageVersion, 10_000);
+setInterval(checkPageVersion, 5 * 60 * 1000);
 </script>
 </body></html>
