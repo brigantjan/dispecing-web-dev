@@ -2505,6 +2505,48 @@ function aiVyberKandidata(typ, balik, adresa, ltIso, isAdd, dnesIso){
   return { technik: null, plan: cielIso, prekLT: false, dovod: 'no-capacity' };
 }
 
+// ── AI TIME WINDOW ───────────────────────────────────────────
+// Nájde prvý voľný slot od rána pre technika na daný deň.
+// Sloty: pos 0=07:30, 1=09:00, 2=10:30 ... (krok 90 min, okno 2h, prekryv 30 min)
+// Možnosť B: hľadá prvú VOĽNÚ medzeru (nie len "za posledným")
+function aiTimeWindow(technik, planIso){
+  const BASE_MIN  = 7*60+30;   // 07:30
+  const DURATION  = 120;       // 2 hodiny
+  const SLOT_STEP = 90;        // 90 min krok (2h - 30min overlap)
+  const _parseMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+  const _fmt = n => `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
+
+  if(!technik||!planIso) return {cas_od:'',cas_do:''};
+
+  // Existujúce plánované (neuzavreté, nestornované) objednávky technika na daný deň
+  const existing=MOCK_OBJ.filter(o=>
+    o.zdroj===technik && o.plan===planIso && !o.real && o.farba!=='zlta'
+  );
+
+  if(!existing.length){
+    return {cas_od:_fmt(BASE_MIN), cas_do:_fmt(BASE_MIN+DURATION)};
+  }
+
+  // Určíme obsadenú pozíciu každej objednávky
+  const occupied=new Set();
+  for(const o of existing){
+    let pos=0;
+    if(o.cas_od){
+      pos=Math.round((_parseMin(o.cas_od)-BASE_MIN)/SLOT_STEP);
+      if(pos<0) pos=0;
+    }
+    // bez cas_od → pos 0 (07:30)
+    occupied.add(pos);
+  }
+
+  // Prvá voľná pozícia od 0
+  let pos=0;
+  while(occupied.has(pos)) pos++;
+
+  const startMin=BASE_MIN+pos*SLOT_STEP;
+  return {cas_od:_fmt(startMin), cas_do:_fmt(startMin+DURATION)};
+}
+
 function aiTrigger(){
   if(aiDone)return;
   const prijatia = document.getElementById('n-prijatia').value;
@@ -2562,6 +2604,22 @@ function aiTrigger(){
     ? ` <strong style="color:#b91c1c">⚠ Daj pre-rezervovať!</strong>`
     : '';
 
+  // Časové okno – len ak AI pridelil technika a dispečérka ešte nenavrhla okno
+  let twLabel = '';
+  if(result.technik && result.plan){
+    const odEl=document.getElementById('n-cas-od');
+    const doEl=document.getElementById('n-cas-do');
+    if(odEl && !odEl.value){
+      const tw=aiTimeWindow(result.technik, result.plan);
+      odEl.value=tw.cas_od;
+      onCasOdChange('n'); // auto-vyplní cas_do (+2h)
+      if(tw.cas_od){
+        const doVal=(doEl&&doEl.value)||tw.cas_do;
+        twLabel=` · 🕐 <strong>${tw.cas_od}–${doVal}</strong>`;
+      }
+    }
+  }
+
   // Diagnostický log – pomôže identifikovať bugy s "Nový používateľ" a podobne
   console.log('[AI] návrh →', {
     typ, balik, adresa, lt, isAdd,
@@ -2582,19 +2640,19 @@ function aiTrigger(){
 
   if(result.dovod === 'ok'){
     hint.className = 'ai-hint ' + (isPreRez ? 'warn' : 'ok');
-    hint.innerHTML = `💡 AI návrh: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${regionLbl}`
+    hint.innerHTML = `💡 AI návrh: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${regionLbl}${twLabel}`
                    + ` <span style="color:#94a3b8;font-size:11px">(skóre ${result.skore})</span>`
                    + prerezHint;
   }
   else if(result.dovod === 'weiss-kvota'){
     hint.className = 'ai-hint ' + (isPreRez ? 'warn' : 'ok');
-    hint.innerHTML = `🤝 Zmluvné pravidlo: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>`
+    hint.innerHTML = `🤝 Zmluvné pravidlo: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${twLabel}`
                    + ` <span style="color:#94a3b8;font-size:11px">Weiss E+O3 ${result.weissInfo}</span>`
                    + prerezHint;
   }
   else if(result.dovod === 'ok-overload'){
     hint.className = 'ai-hint warn';
-    hint.innerHTML = `⚠ AI návrh: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${regionLbl}`
+    hint.innerHTML = `⚠ AI návrh: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${regionLbl}${twLabel}`
                    + ` <span style="color:#b45309;font-size:11px">– technici sú vyťažení nad cieľovú kapacitu</span>`
                    + prerezHint;
   }
