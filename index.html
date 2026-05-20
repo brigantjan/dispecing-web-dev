@@ -1760,6 +1760,7 @@ function switchTab(idx){
   }
   // Pri opustení záložky Objednávky vyčisti bulk selection (predchádza zmätku)
   if(activeTab===1 && idx!==1) bulkClear();
+  if(activeTab===3 && idx!==3) prChecked.clear(); // odchod z Pre-rezervované → reset výberu
   activeTab=idx;
   if(idx===1){
     // Optimalizácia: re-rendruj tabuľku len ak sa MOCK_OBJ zmenil od posledného render.
@@ -3223,18 +3224,20 @@ function showPlan(){
 // ════════════════════════════════════════════════════════════
 let prChecked=new Set();
 function showPrerezerv(){
-  prChecked.clear();
   const stFilter=(currentUser?.rola==='vedenie'&&vedenieSt!=='vsetky')?vedenieSt:null;
   const src=stFilter?MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===stFilter):MOCK_OBJ;
   const rows=src.filter(o=>
     o.farba==='modra'&&!o.real&&o.farba!=='zlta'
   ).sort((a,b)=>(a.plan||'').localeCompare(b.plan||''));
+  // Zachovaj len zaškrtnuté ktoré sú stále v zozname
+  prChecked.forEach(id=>{ if(!rows.find(o=>o.id_obj===id)) prChecked.delete(id); });
   document.getElementById('pr-sum').textContent=`Pre-rezervácií: ${rows.length}`;
   document.getElementById('pr-tbody').innerHTML=rows.map(o=>{
     const rm=o.pozn.match(/REZ\s*(\d{1,2})/);const rezStr=rm?`REZ${rm[1].padStart(2,'0')}`:'';
     const emailFlg=o.pozn.includes('Email odoslaný');
-    return`<tr class="tr-blue" ondblclick="otvorEditModal('${o.id_obj}')">
-      <td class="chk-cell" onclick="prToggle(event,'${o.id_obj}')">☐</td>
+    const chk=prChecked.has(o.id_obj)?'☑':'☐';
+    return`<tr class="tr-blue${prChecked.has(o.id_obj)?' bulk-checked':''}" ondblclick="otvorEditModal('${o.id_obj}')">
+      <td class="chk-cell" onclick="prToggle(event,'${o.id_obj}')">${chk}</td>
       <td class="td-mono">${o.id_obj}</td><td>${o.meno||''}</td><td>${o.adresa||''}</td>
       <td>${o.typ||''}</td><td>${o.balik||''}</td><td>${fmtD(o.prijatia)}</td>
       <td style="font-weight:700;color:var(--red)">${fmtD(o.plan)}</td>
