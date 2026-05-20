@@ -358,6 +358,12 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <div style="width:38px;height:38px;border:4px solid #e2e8f0;border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite"></div>
   <div id="app-loader-text" style="color:var(--muted);font-size:13px;font-weight:500">Načítavam dáta…</div>
 </div>
+<!-- Update banner – zobrazí sa keď je dostupná nová verzia -->
+<div id="update-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:#1d4ed8;color:#fff;padding:8px 16px;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+  🔄 Je dostupná nová verzia DISPECING
+  <button onclick="location.reload(true)" style="background:#fff;color:#1d4ed8;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">Obnoviť teraz</button>
+  <button onclick="document.getElementById('update-bar').style.display='none'" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer">Neskôr</button>
+</div>
 <div id="login-screen">
 <div class="lcard">
   <div class="llogo"><div class="lt">DISPECING</div><div class="ls">SUPTEL · Správa zriaďovacích objednávok</div></div>
@@ -5297,42 +5303,27 @@ document.addEventListener('keydown',e=>{
   }
 });
 // ════════════════════════════════════════════════════════════
-// AUTO VERSION CHECK – pri zmene index.html na serveri auto-reload
-// Používa HEAD request (cache: no-store) a porovnáva ETag / Last-Modified
+// AUTO VERSION CHECK – pri zmene index.html upozorní používateľa
+// Nezrobí automatický reload – dispečérka si sama zvolí kedy obnoví
 // ════════════════════════════════════════════════════════════
 let _versionEtag = null;
-let _versionReloadPending = false;
 
 async function checkPageVersion() {
-  if (_versionReloadPending) return;
   try {
     const r = await fetch(location.href, { method: 'HEAD', cache: 'no-store' });
     const etag = r.headers.get('ETag') || r.headers.get('Last-Modified') || null;
-    if (!etag) return; // server nepodporuje ETag – nič nerob
-    if (_versionEtag === null) {
-      _versionEtag = etag; // prvé načítanie – ulož referenciu
-      return;
-    }
+    if (!etag) return;
+    if (_versionEtag === null) { _versionEtag = etag; return; }
     if (etag !== _versionEtag) {
-      _versionReloadPending = true;
       _versionEtag = etag;
-      // Toast s odpočítavaním
-      let sec = 10;
-      const id = setInterval(() => {
-        sec--;
-        toast(`🔄 Dostupná nová verzia DISPECING – obnova za ${sec}s`, 'info');
-        if (sec <= 0) {
-          clearInterval(id);
-          location.reload(true);
-        }
-      }, 1000);
-      toast(`🔄 Dostupná nová verzia DISPECING – obnova za ${sec}s`, 'info');
+      // Zobraz trvalý banner – používateľ sa rozhodne sám
+      const bar = document.getElementById('update-bar');
+      if (bar) bar.style.display = 'flex';
     }
-  } catch (e) { /* sieť nedostupná – preskočiť */ }
+  } catch (e) { /* sieť nedostupná */ }
 }
 
-// Prvá kontrola 10s po načítaní stránky, potom každých 5 minút
-setTimeout(checkPageVersion, 10_000);
-setInterval(checkPageVersion, 5 * 60 * 1000);
+setTimeout(checkPageVersion, 30_000);          // prvá kontrola po 30s
+setInterval(checkPageVersion, 15 * 60 * 1000); // každých 15 minút
 </script>
 </body></html>
