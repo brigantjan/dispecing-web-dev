@@ -5071,7 +5071,7 @@ function zobrazNapovedu(){
 }
 
 
-function zobrazStatistiky(){
+async function zobrazStatistiky(){
   // Otvor okno – obsah generujeme dynamicky cez JS, dáta vkladáme INLINE do HTML
   const w=window.open('','_blank','width=820,height=640');
   if(!w){toast('⚠ Otváranie okna bolo zablokované prehliadačom');return;}
@@ -5087,13 +5087,17 @@ function zobrazStatistiky(){
   const STREDISKO_LABEL={'zilina':'Žilina','bratislava':'Bratislava','trencin':'Trenčín'};
   const stLabel = stFilter ? `SUPTEL ${(STREDISKO_LABEL[stFilter]||stFilter).toUpperCase()}` : (STREDISKO_LABEL[currentUser?.stredisko]?`SUPTEL ${STREDISKO_LABEL[currentUser.stredisko].toUpperCase()}`:'SUPTEL');
 
-  // Dáta inline – cez window.opener nefunguje (browser security).
-  // Posielame len fields ktoré stats potrebujú – kompaktnejšie ako celé objekty.
   const srcData = stFilter ? MOCK_OBJ.filter(o=>(o.stredisko||'zilina')===stFilter) : MOCK_OBJ;
+  // Pridáme id pre cross-referenciu s prerezerv históriou
   const slimData=srcData.map(o=>({
-    p:o.prijatia||'', r:o.real||'', f:o.farba||'', z:o.zdroj||'', a:o.add_txt||''
+    id:o.id_obj, p:o.prijatia||'', r:o.real||'', f:o.farba||'', z:o.zdroj||'', a:o.add_txt||''
   }));
+
+  // Načítaj prerezerv históriu – správny výpočet bez ohľadu na aktuálny stav objednávky
+  let prerezvIds = [];
+  try { prerezvIds = await api('GET', '/api/stats/prerezerv'); } catch(e) {}
   const dataJSON=JSON.stringify(slimData);
+  const prerezvJSON=JSON.stringify(prerezvIds);
 
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Štatistiky DISPECING</title>
   <style>body{font-family:Segoe UI,Arial,sans-serif;padding:20px;background:#f0f2f5;margin:0}
@@ -5123,6 +5127,7 @@ function zobrazStatistiky(){
   <script>
   // Dáta sa vkladajú inline pri generovaní okna (window.opener nie je dostupný v moderných browseroch)
   var STATS_DATA = ${dataJSON};
+  var PREREZERV_IDS = new Set(${prerezvJSON});
   function render(){
     var rok=document.getElementById('f-rok').value;
     var mes=document.getElementById('f-mesiac').value;
@@ -5151,10 +5156,12 @@ function zobrazStatistiky(){
       var sumA=realizAdd.reduce(function(a,o){return a+((new Date(o.r)-new Date(o.p))/(1000*60*60*24)||0);},0);
       avgDniAdd=(sumA/realizAdd.length).toFixed(1)+' dní';
     }
-    // Prerezervované (modra = ADD objednávky čakajúce na realizáciu)
-    var prerezv=data.filter(function(o){return o.f==='modra';}).length;
+    // Prerezervované – správny výpočet z histórie (nie aktuálny stav farby)
+    // Počítame všetky objednávky prijaté v danom období ktoré NIEKEDY dostali prerezerv status
+    var prerezv=data.filter(function(o){return PREREZERV_IDS.has(o.id);}).length;
+    var prerezAdd=addData.filter(function(o){return PREREZERV_IDS.has(o.id);}).length;
     var pctAll=total>0?(prerezv/total*100).toFixed(1)+'%':'–';
-    var pctAdd=addTotal>0?(prerezv/addTotal*100).toFixed(1)+'%':'–';
+    var pctAdd=addTotal>0?(prerezAdd/addTotal*100).toFixed(1)+'%':'–';
     var tech={};
     data.forEach(function(o){
       if(!o.z)return;
