@@ -587,6 +587,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <button class="btn btn-outline btn-xs" onclick="zobrazStatistiky()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📊 Štatistiky</button>
       <button id="btn-denny-sumar" class="btn btn-outline btn-xs" onclick="showDennySumar()" style="padding:5px 10px;font-size:12px;white-space:nowrap;display:none">📑 Denný sumár</button>
       <button class="btn btn-outline btn-xs" onclick="exportMesacnyVykaz()" style="padding:5px 10px;font-size:12px;white-space:nowrap">📋 Mesačný výkaz</button>
+      <button id="btn-kvota" class="btn btn-outline btn-xs" onclick="otvorKvota()" style="padding:5px 10px;font-size:12px;white-space:nowrap">🎯 Kvóta</button>
       <button class="btn btn-green btn-xs" onclick="exportExcel()" title="Exportovať zobrazené záznamy do Excelu" style="padding:5px 12px;font-size:12px;font-weight:600;white-space:nowrap">📥 Export Excel</button>
       <button id="btn-skratky" class="btn btn-outline btn-xs" onclick="zobrazNapovedu()" title="Nápoveda – klávesové skratky" style="padding:5px 10px;font-size:12px;white-space:nowrap">⌨ Skratky</button>
     </div>
@@ -670,6 +671,88 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
         <thead><tr><th>Technik</th><th>ID</th><th>Meno</th><th>Adresa</th><th>Typ</th><th>Balík</th><th>Prijatie</th><th>LT</th><th>ADD</th><th>Poznámky</th></tr></thead>
         <tbody id="p-tbody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- MODAL: Kvóta kalkulátor -->
+  <div id="kvota-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)zatvorKvota()">
+    <div class="modal-box" style="max-width:460px;width:96%">
+      <div class="modal-header">
+        <h3>🎯 Kvóta kalkulátor</h3>
+        <button class="modal-close" onclick="zatvorKvota()">✕</button>
+      </div>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">TECHNIK</label>
+            <select id="kv-technik" onchange="vypocitajKvotu()" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
+              <option value="">– vyber –</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">TYP OBJEDNÁVKY</label>
+            <select id="kv-typ" onchange="vypocitajKvotu()" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
+              <option value="">– všetky –</option>
+              <option value="E">E</option>
+              <option value="M">M</option>
+              <option value="O">O</option>
+              <option value="SAT">SAT</option>
+              <option value="PIV">PIV</option>
+              <option value="TV">TV</option>
+              <option value="PV">PV</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">ROK</label>
+            <select id="kv-rok" onchange="vypocitajKvotu()" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:13px"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">MESIAC</label>
+            <select id="kv-mes" onchange="vypocitajKvotu()" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
+              <option value="">– celý rok –</option>
+              <option value="01">Január</option><option value="02">Február</option>
+              <option value="03">Marec</option><option value="04">Apríl</option>
+              <option value="05">Máj</option><option value="06">Jún</option>
+              <option value="07">Júl</option><option value="08">August</option>
+              <option value="09">September</option><option value="10">Október</option>
+              <option value="11">November</option><option value="12">December</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap">CIEĽ %</label>
+          <input id="kv-ciel" type="number" min="1" max="100" value="60" oninput="vypocitajKvotu()"
+            style="width:80px;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
+          <span style="font-size:13px;color:var(--muted)">%</span>
+        </div>
+        <!-- Výsledok -->
+        <div id="kv-result" style="display:none;background:var(--bg2);border-radius:8px;padding:14px;margin-top:4px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+            <div style="text-align:center">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Celkom objednávok</div>
+              <div id="kv-total" style="font-size:22px;font-weight:700;color:var(--accent)">0</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Priradených technikovi</div>
+              <div id="kv-assigned" style="font-size:22px;font-weight:700;color:var(--accent)">0</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Aktuálne %</div>
+              <div id="kv-pct" style="font-size:22px;font-weight:700">0%</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Chýba do cieľa</div>
+              <div id="kv-chyba" style="font-size:22px;font-weight:700">–</div>
+            </div>
+          </div>
+          <!-- Progress bar -->
+          <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden">
+            <div id="kv-bar" style="height:100%;border-radius:99px;transition:width .4s;width:0%"></div>
+          </div>
+          <div id="kv-status" style="text-align:center;margin-top:8px;font-size:12px;font-weight:600"></div>
+        </div>
+        <div id="kv-hint" style="font-size:12px;color:var(--muted);text-align:center">Vyber technika a typ objednávky.</div>
+      </div>
     </div>
   </div>
 
@@ -2528,7 +2611,116 @@ function aiVyberKandidata(typ, balik, adresa, ltIso, isAdd, dnesIso){
   return { technik: null, plan: cielIso, prekLT: false, dovod: 'no-capacity' };
 }
 
-// ── AI TIME WINDOW ───────────────────────────────────────────
+// ── KVÓTA KALKULÁTOR ────────────────────────────────────────
+function otvorKvota(){
+  const modal=document.getElementById('kvota-modal');
+  if(!modal) return;
+
+  // Naplň dropdown technikov
+  const sel=document.getElementById('kv-technik');
+  const cur=sel.value;
+  const technici=[...new Set([
+    ...(TECHNICI||[]),
+    ...(DEMO_USERS||[]).filter(u=>u.rola==='technik').map(u=>u.technik_meno||u.meno).filter(Boolean),
+    ...MOCK_OBJ.map(o=>o.zdroj).filter(Boolean)
+  ])].sort();
+  sel.innerHTML='<option value="">– vyber –</option>'+technici.map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+
+  // Naplň roky z MOCK_OBJ
+  const rokSel=document.getElementById('kv-rok');
+  const curRok=rokSel.value||String(new Date().getFullYear());
+  const roky=[...new Set(MOCK_OBJ.map(o=>(o.prijatia||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  rokSel.innerHTML=roky.map(r=>`<option value="${r}"${r===curRok?' selected':''}>${r}</option>`).join('');
+
+  // Predvyplň aktuálny mesiac
+  const curMes=document.getElementById('kv-mes').value;
+  if(!curMes){
+    document.getElementById('kv-mes').value=String(new Date().getMonth()+1).padStart(2,'0');
+  }
+
+  modal.style.display='flex';
+  vypocitajKvotu();
+}
+
+function zatvorKvota(){
+  document.getElementById('kvota-modal').style.display='none';
+}
+
+function vypocitajKvotu(){
+  const technik=document.getElementById('kv-technik').value;
+  const typ=document.getElementById('kv-typ').value;
+  const rok=document.getElementById('kv-rok').value;
+  const mes=document.getElementById('kv-mes').value;
+  const ciel=parseFloat(document.getElementById('kv-ciel').value)||60;
+
+  const hint=document.getElementById('kv-hint');
+  const result=document.getElementById('kv-result');
+
+  if(!technik){
+    hint.style.display='block';
+    hint.textContent='Vyber technika.';
+    result.style.display='none';
+    return;
+  }
+
+  // Filtrovanie podľa prijatia (nie realizácie!)
+  let data=MOCK_OBJ.filter(o=>{
+    const p=o.prijatia||'';
+    if(rok && p.slice(0,4)!==rok) return false;
+    if(mes && p.slice(5,7)!==mes) return false;
+    if(typ && o.typ!==typ) return false;
+    return true;
+  });
+
+  const total=data.length;
+  const assigned=data.filter(o=>o.zdroj===technik).length;
+  const pct=total>0?(assigned/total*100):0;
+  const potreba=Math.ceil(total*ciel/100);
+  const chyba=Math.max(0,potreba-assigned);
+
+  // UI update
+  document.getElementById('kv-total').textContent=total;
+  document.getElementById('kv-assigned').textContent=assigned;
+  const pctEl=document.getElementById('kv-pct');
+  pctEl.textContent=total>0?pct.toFixed(1)+'%':'–';
+
+  const chybaEl=document.getElementById('kv-chyba');
+  if(total===0){
+    chybaEl.textContent='–';
+    chybaEl.style.color='var(--muted)';
+  } else if(chyba===0){
+    chybaEl.textContent='✓';
+    chybaEl.style.color='#16a34a';
+  } else {
+    chybaEl.textContent='+'+chyba;
+    chybaEl.style.color='#dc2626';
+  }
+
+  // Progress bar
+  const pctCapped=Math.min(100,pct);
+  const bar=document.getElementById('kv-bar');
+  bar.style.width=pctCapped+'%';
+  const ratio=total>0?pct/ciel:0;
+  bar.style.background=ratio>=1?'#16a34a':ratio>=0.8?'#f59e0b':'#dc2626';
+  pctEl.style.color=ratio>=1?'#16a34a':ratio>=0.8?'#f59e0b':'#dc2626';
+
+  // Status text
+  const statusEl=document.getElementById('kv-status');
+  if(total===0){
+    statusEl.textContent='Žiadne objednávky pre dané kritériá.';
+    statusEl.style.color='var(--muted)';
+  } else if(chyba===0){
+    statusEl.textContent=`✅ Kvóta splnená (${pct.toFixed(1)}% ≥ ${ciel}%)`;
+    statusEl.style.color='#16a34a';
+  } else {
+    statusEl.textContent=`⚠ Treba priradiť ešte ${chyba} objednávok na dosiahnutie ${ciel}%`;
+    statusEl.style.color='#dc2626';
+  }
+
+  hint.style.display='none';
+  result.style.display='block';
+}
+
 // Nájde prvý voľný slot od rána pre technika na daný deň.
 // Sloty: pos 0=07:30, 1=09:00, 2=10:30 ... (krok 90 min, okno 2h, prekryv 30 min)
 // Možnosť B: hľadá prvú VOĽNÚ medzeru (nie len "za posledným")
