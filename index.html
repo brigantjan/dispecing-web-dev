@@ -675,27 +675,28 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     </div>
   </div>
 
-  <!-- MODAL: Asistent volania cez ústredňu -->
-  <div id="ustredna-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:4200;align-items:center;justify-content:center" onclick="if(event.target===this)zatvorUstredna()">
-    <div style="background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.25);max-width:380px;width:94%">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0">
-        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1e293b">📞 Volanie cez ústredňu</h3>
+  <!-- PANEL: Asistent volania cez ústredňu (presúvateľný, bez tmavého pozadia) -->
+  <div id="ustredna-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:4200;pointer-events:none">
+    <div id="ustredna-box" style="position:absolute;top:90px;right:30px;width:330px;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);border:1px solid #cbd5e1;pointer-events:auto">
+      <div id="ustredna-handle" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e2e8f0;cursor:grab;background:#f1f5f9;border-radius:12px 12px 0 0;user-select:none">
+        <h3 style="margin:0;font-size:14px;font-weight:700;color:#1e293b">📞 Volanie cez ústredňu</h3>
         <button onclick="zatvorUstredna()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;line-height:1;padding:2px 6px">✕</button>
       </div>
-      <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
-        <div style="font-size:12px;color:#64748b;line-height:1.5">Ústredňa <b>0244851598</b> sa vytáča. Po výzve naťukaj na telefóne:</div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div id="ust-info" style="font-size:12px;color:#64748b;line-height:1.5">Ústredňa <b>0244851598</b> sa vytáča. Po výzve naťukaj na telefóne:</div>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
           <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px">1. ČÍSLO ZÁKAZNÍKA + #</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <span id="ust-cislo" style="font-size:22px;font-weight:700;color:#1e293b;letter-spacing:1px">–</span>
-            <button class="btn btn-green btn-xs" onclick="kopirujText(document.getElementById('ust-cislo').textContent)" style="padding:4px 10px;font-size:11px">Kopíruj</button>
-          </div>
+          <div id="ust-cislo" style="font-size:26px;font-weight:700;color:#1e293b;letter-spacing:2px">–</div>
         </div>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
           <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px">2. KÓD AKTIVITY + #</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <span id="ust-kod" style="font-size:22px;font-weight:700;color:#1e293b;letter-spacing:1px">–</span>
-            <button class="btn btn-green btn-xs" onclick="kopirujText(document.getElementById('ust-kod').textContent)" style="padding:4px 10px;font-size:11px">Kopíruj</button>
+          <div id="ust-kod" style="font-size:26px;font-weight:700;color:#1e293b;letter-spacing:2px">–</div>
+        </div>
+        <div style="border-top:1px solid #e2e8f0;padding-top:10px">
+          <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:6px">SPÔSOB VOLANIA</div>
+          <div style="display:flex;gap:6px">
+            <button id="ust-mode-asist" onclick="nastavHovorRezim('ustredna-asist')" style="flex:1;padding:7px 4px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #cbd5e1;background:#fff">Asistovaný</button>
+            <button id="ust-mode-auto" onclick="nastavHovorRezim('ustredna-auto')" style="flex:1;padding:7px 4px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #cbd5e1;background:#fff">Automatický (DTMF)</button>
           </div>
         </div>
         <button onclick="zatvorUstredna()" class="btn btn-green" style="padding:9px;font-size:13px">Hotovo</button>
@@ -1386,7 +1387,7 @@ function aiReTrigger(){
 //                     Závisí od podpory post-dial DTMF v Phone Link/Samsung – OTESTOVAŤ V DEV.
 //  'phonelink'      – priame volanie zákazníkovi (pôvodný režim, ponechaný ako fallback).
 //  'ai'             – budúce AI volanie cez Twilio (zatiaľ neimplementované).
-const HOVOR_REZIM = 'ustredna-asist';
+let HOVOR_REZIM = (function(){ try{ return localStorage.getItem('hovor_rezim') || 'ustredna-asist'; }catch(e){ return 'ustredna-asist'; } })();
 const USTREDNA_CISLO = '0244851598';   // číslo ústredne Slovak Telekom
 const USTREDNA_PAUZA = ',,,,';          // DTMF pauza (1 čiarka ~2s) pre režim 'ustredna-auto'
 
@@ -1445,34 +1446,109 @@ async function zacniHovor(rawCislo, idObj, kodAktivity){
     poznamka: 'Ústredňa ' + USTREDNA_CISLO + (kod ? ' · kód ' + kod : '')
   }).catch(e => console.warn('Hovor log zlyhal:', e.message));
 
-  if(HOVOR_REZIM === 'ustredna-auto' && kod){
-    // Celá sekvencia v jednom tel: URI – ústredňa, pauza, číslo#, pauza, kód#
-    window.location.href = 'tel:' + USTREDNA_CISLO + USTREDNA_PAUZA + lokal + '#' + USTREDNA_PAUZA + kod + '#';
-    toast('📞 Volám cez ústredňu (auto)');
-  } else if(HOVOR_REZIM === 'phonelink'){
+  if(HOVOR_REZIM === 'phonelink'){
     // Priame volanie zákazníkovi (fallback)
     window.location.href = 'tel:' + cislo;
     toast('📞 Volám ' + cislo);
   } else if(HOVOR_REZIM === 'ai'){
     toast('🤖 AI volanie zatiaľ nie je implementované');
+  } else if(HOVOR_REZIM === 'ustredna-auto'){
+    if(kod){
+      // Celá sekvencia v jednom tel: URI – ústredňa, pauza, číslo#, pauza, kód#
+      window.location.href = 'tel:' + USTREDNA_CISLO + USTREDNA_PAUZA + lokal + '#' + USTREDNA_PAUZA + kod + '#';
+    } else {
+      toast('⚠ Chýba kód aktivity – vytáčam len ústredňu, kód doplň ručne');
+      window.location.href = 'tel:' + USTREDNA_CISLO;
+    }
+    zobrazUstrednaPanel(lokal, kod, true);
   } else {
     // 'ustredna-asist' (predvolené) – vytoč ústredňu a ukáž panel s údajmi
-    if(!kod) toast('⚠ Chýba kód aktivity – po spojení ho budeš musieť doplniť ručne');
+    if(!kod) toast('⚠ Chýba kód aktivity – po spojení ho doplň ručne');
     window.location.href = 'tel:' + USTREDNA_CISLO;
-    zobrazUstrednaPanel(lokal, kod);
+    zobrazUstrednaPanel(lokal, kod, false);
   }
 }
 
 // Panel asistenta – ukáže číslo zákazníka a kód aktivity na zadanie do ústredne.
-function zobrazUstrednaPanel(lokal, kod){
+function zobrazUstrednaPanel(lokal, kod, auto){
   document.getElementById('ust-cislo').textContent = lokal || '–';
   document.getElementById('ust-kod').textContent   = kod   || '–';
-  document.getElementById('ustredna-modal').style.display = 'flex';
+  document.getElementById('ust-info').innerHTML = auto
+    ? 'Automaticky vytáčam cez ústredňu <b>0244851598</b>. Ak nereaguje na tóny, naťukaj ručne:'
+    : 'Ústredňa <b>0244851598</b> sa vytáča. Po výzve naťukaj na telefóne:';
+  document.getElementById('ustredna-modal').style.display = 'block';
+  initUstrednaDrag();
+  updateHovorModeUI();
 }
 function zatvorUstredna(){ document.getElementById('ustredna-modal').style.display = 'none'; }
-function kopirujText(t){
-  if(!t || t === '–') return;
-  navigator.clipboard?.writeText(t).then(()=>toast('✓ Skopírované: ' + t)).catch(()=>{});
+
+// Prepínač spôsobu volania (uloží sa do localStorage, platí pre ďalšie hovory).
+function nastavHovorRezim(m){
+  HOVOR_REZIM = m;
+  try{ localStorage.setItem('hovor_rezim', m); }catch(e){}
+  updateHovorModeUI();
+  toast(m === 'ustredna-auto' ? 'Režim: Automatický (DTMF)' : 'Režim: Asistovaný');
+}
+function updateHovorModeUI(){
+  const a=document.getElementById('ust-mode-asist'), b=document.getElementById('ust-mode-auto');
+  if(!a||!b) return;
+  const base='flex:1;padding:7px 4px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid;';
+  const act='background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700';
+  const ina='background:#fff;color:#475569;border-color:#cbd5e1;font-weight:500';
+  const isAuto = HOVOR_REZIM==='ustredna-auto';
+  a.style.cssText = base + (isAuto?ina:act);
+  b.style.cssText = base + (isAuto?act:ina);
+}
+
+// Presúvateľnosť panela – ťahanie za hlavičku (idempotentné).
+let _ustDragInit=false;
+function initUstrednaDrag(){
+  if(_ustDragInit) return;
+  const box=document.getElementById('ustredna-box');
+  const handle=document.getElementById('ustredna-handle');
+  if(!box||!handle) return;
+  let dx=0,dy=0,drag=false;
+  handle.addEventListener('mousedown',e=>{
+    if(e.target.tagName==='BUTTON') return;   // ✕ neťahá
+    const r=box.getBoundingClientRect();
+    dx=e.clientX-r.left; dy=e.clientY-r.top;
+    box.style.right='auto'; box.style.left=r.left+'px'; box.style.top=r.top+'px';
+    drag=true; handle.style.cursor='grabbing'; e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    box.style.left=(e.clientX-dx)+'px';
+    box.style.top=(e.clientY-dy)+'px';
+  });
+  document.addEventListener('mouseup',()=>{ if(drag){ drag=false; handle.style.cursor='grab'; } });
+  _ustDragInit=true;
+}
+
+// Otvorí email v KLASICKOM Outlooku cez stiahnutý .eml (X-Unsent:1).
+// Asociácia .eml v Office = klasický Outlook → obíde mailto: handler (nový Outlook/Edge).
+function otvorEmailVOutlooku(to, subject, bodyTxt, filePrefix){
+  const utf8Subject='=?utf-8?B?'+btoa(unescape(encodeURIComponent(subject)))+'?=';
+  const b64=s=>{ const u=unescape(encodeURIComponent(s)); return btoa(u).match(/.{1,76}/g).join('\r\n'); };
+  const eml=[
+    'X-Unsent: 1',
+    'To: '+(to||''),
+    'Subject: '+utf8Subject,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64(bodyTxt),
+    ''
+  ].join('\r\n');
+  const blob=new Blob([eml],{type:'message/rfc822'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=(filePrefix||'email')+'_'+Date.now().toString(36)+'.eml';
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); if(a.parentNode) a.parentNode.removeChild(a); },1500);
 }
 // ════════════════════════════════════════════════════════════
 // BULK SELECTION (Objednávky – hromadné akcie)
@@ -3042,12 +3118,8 @@ function zapisObjednavku(){
       const _ct=novyZaznam.cas_od?` a časovým oknom ${novyZaznam.cas_od} – ${novyZaznam.cas_do}`:'';
       const _subj=`Pridelená objednávka: ${novyZaznam.meno} – ${novyZaznam.adresa}`;
       const _bod=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_pf}${_ct}.\n\nID: ${idObj}\nZákazník: ${novyZaznam.meno}\nAdresa: ${novyZaznam.adresa}\nTyp: ${novyZaznam.typ} | Balík: ${novyZaznam.balik}\nLT: ${novyZaznam.lt||'–'}\n\nDISPECING SUPTEL`;
-      const _a=document.createElement('a');
-      _a.href=`mailto:${_nt.technik_email}?subject=${encodeURIComponent(_subj)}&body=${encodeURIComponent(_bod)}`;
-      _a.style.display='none';
-      document.body.appendChild(_a);
-      _a.click();
-      setTimeout(()=>_a.parentNode&&_a.parentNode.removeChild(_a),1000);
+      otvorEmailVOutlooku(_nt.technik_email, _subj, _bod, 'pridelenie');
+      toast(`📧 Email pre ${_nt.technik_meno} pripravený – klikni na stiahnutý .eml (otvorí starý Outlook)`);
     }
   }
   vymazatFormu();renderRecent();
@@ -3895,7 +3967,7 @@ function saveEdit(){
   }
   toast(`✓ Uložené: ${editCurrentId}`);setStatus(`✓ Zmenené: ${editCurrentId}`,'ok');
   closeEdit();afterEditRefresh();
-  // Email technikovi cez Outlook (mailto:) ak sa zmenil technik a má zapnuté notifikácie
+  // Email technikovi cez starý Outlook (.eml) ak sa zmenil technik a má zapnuté notifikácie
   if(o.zdroj && (editOrigObj?.zdroj||'')!==o.zdroj){
     const _tech=DEMO_USERS.find(u=>u.technik_meno===o.zdroj&&u.technik_email_notify&&u.technik_email);
     if(_tech){
@@ -3903,13 +3975,8 @@ function saveEdit(){
       const _casText=o.cas_od?` a časovým oknom ${o.cas_od} – ${o.cas_do}`:'';
       const _subj=`Pridelená objednávka: ${o.meno} – ${o.adresa}`;
       const _body=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_planFmt}${_casText}.\n\nID: ${editCurrentId}\nZákazník: ${o.meno}\nAdresa: ${o.adresa}\nTyp: ${o.typ} | Balík: ${o.balik}\nLT: ${o.lt||'–'}\n\nDISPECING SUPTEL`;
-      const _a=document.createElement('a');
-      _a.href=`mailto:${_tech.technik_email}?subject=${encodeURIComponent(_subj)}&body=${encodeURIComponent(_body)}`;
-      _a.style.display='none';
-      document.body.appendChild(_a);
-      _a.click();
-      setTimeout(()=>_a.parentNode&&_a.parentNode.removeChild(_a),1000);
-      toast(`📧 Email pre ${_tech.technik_meno} odoslaný do Outlooku`);
+      otvorEmailVOutlooku(_tech.technik_email, _subj, _body, 'pridelenie');
+      toast(`📧 Email pre ${_tech.technik_meno} pripravený – klikni na stiahnutý .eml (otvorí starý Outlook)`);
     }
   }
   // ── Granulárne logovanie histórie ──────────────────────────
