@@ -3118,8 +3118,10 @@ function zapisObjednavku(){
       const _ct=novyZaznam.cas_od?` a časovým oknom ${novyZaznam.cas_od} – ${novyZaznam.cas_do}`:'';
       const _subj=`Pridelená objednávka: ${novyZaznam.meno} – ${novyZaznam.adresa}`;
       const _bod=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_pf}${_ct}.\n\nID: ${idObj}\nZákazník: ${novyZaznam.meno}\nAdresa: ${novyZaznam.adresa}\nTyp: ${novyZaznam.typ} | Balík: ${novyZaznam.balik}\nLT: ${novyZaznam.lt||'–'}\n\nDISPECING SUPTEL`;
-      otvorEmailVOutlooku(_nt.technik_email, _subj, _bod, 'pridelenie');
-      toast(`📧 Email pre ${_nt.technik_meno} pripravený – klikni na stiahnutý .eml (otvorí starý Outlook)`);
+      try{
+        otvorEmailVOutlooku(_nt.technik_email, _subj, _bod, 'pridelenie');
+        toast(`📧 Email pre ${_nt.technik_meno} pripravený – klikni na stiahnutý .eml (otvorí starý Outlook)`);
+      }catch(_e){ console.warn('Email technikovi zlyhal (zápis pokračuje):', _e); }
     }
   }
   vymazatFormu();renderRecent();
@@ -3975,8 +3977,10 @@ function saveEdit(){
       const _casText=o.cas_od?` a časovým oknom ${o.cas_od} – ${o.cas_do}`:'';
       const _subj=`Pridelená objednávka: ${o.meno} – ${o.adresa}`;
       const _body=`Dobrý deň,\n\nbola Vám pridelená objednávka s plánovaným termínom realizácie ${_planFmt}${_casText}.\n\nID: ${editCurrentId}\nZákazník: ${o.meno}\nAdresa: ${o.adresa}\nTyp: ${o.typ} | Balík: ${o.balik}\nLT: ${o.lt||'–'}\n\nDISPECING SUPTEL`;
-      otvorEmailVOutlooku(_tech.technik_email, _subj, _body, 'pridelenie');
-      toast(`📧 Email pre ${_tech.technik_meno} pripravený – klikni na stiahnutý .eml (otvorí starý Outlook)`);
+      try{
+        otvorEmailVOutlooku(_tech.technik_email, _subj, _body, 'pridelenie');
+        toast(`📧 Email pre ${_tech.technik_meno} pripravený – klikni na stiahnutý .eml (otvorí starý Outlook)`);
+      }catch(_e){ console.warn('Email technikovi zlyhal (úprava pokračuje):', _e); }
     }
   }
   // ── Granulárne logovanie histórie ──────────────────────────
