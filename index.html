@@ -693,13 +693,6 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px">2. KÓD AKTIVITY + #</div>
           <div id="ust-kod" style="font-size:26px;font-weight:700;color:#1e293b;letter-spacing:2px">–</div>
         </div>
-        <div style="border-top:1px solid #e2e8f0;padding-top:10px">
-          <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:6px">SPÔSOB VOLANIA</div>
-          <div style="display:flex;gap:6px">
-            <button id="ust-mode-asist" onclick="nastavHovorRezim('ustredna-asist')" style="flex:1;padding:7px 4px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #cbd5e1;background:#fff">Asistovaný</button>
-            <button id="ust-mode-auto" onclick="nastavHovorRezim('ustredna-auto')" style="flex:1;padding:7px 4px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #cbd5e1;background:#fff">Automatický (DTMF)</button>
-          </div>
-        </div>
         <button onclick="zatvorUstredna()" class="btn btn-green" style="padding:9px;font-size:13px">Hotovo</button>
       </div>
     </div>
@@ -1386,16 +1379,13 @@ function aiReTrigger(){
 // Implementácia: tel: URI scheme → Microsoft Phone Link → Bluetooth → Samsung Android.
 // Pripravené pre budúce prepnutie na AI volanie (Twilio) cez HOVOR_REZIM.
 // ════════════════════════════════════════════════════════════
-// REŽIMY:
+// REŽIM (jediný funkčný):
 //  'ustredna-asist' – vytočí ústredňu + ukáže panel s číslom zákazníka a kódom aktivity
 //                     (dispečérka ich naťuká na výzvu IVR). Spoľahlivé, funguje vždy.
-//  'ustredna-auto'  – vyskladá celý tel: reťazec s DTMF pauzami (ústredňa, číslo#, kód#).
-//                     Závisí od podpory post-dial DTMF v Phone Link/Samsung – OTESTOVAŤ V DEV.
-//  'phonelink'      – priame volanie zákazníkovi (pôvodný režim, ponechaný ako fallback).
-//  'ai'             – budúce AI volanie cez Twilio (zatiaľ neimplementované).
-let HOVOR_REZIM = (function(){ try{ return localStorage.getItem('hovor_rezim') || 'ustredna-asist'; }catch(e){ return 'ustredna-asist'; } })();
+// (Predošlý režim 'ustredna-auto' s DTMF pauzami bol zrušený – nefungoval spoľahlivo,
+// telefón vytočil zlepené číslo bez '#' a hovor sa neuskutočnil.)
+let HOVOR_REZIM = 'ustredna-asist';
 const USTREDNA_CISLO = '0244851598';   // číslo ústredne Slovak Telekom
-const USTREDNA_PAUZA = ',,,,';          // DTMF pauza (1 čiarka ~2s) pre režim 'ustredna-auto'
 
 // Normalizuje telefónne číslo na formát E.164 (+421901234567).
 // Vstupy ako "0911 234 567", "00420 777", "+421-911-234-567" → +421911234567 atď.
@@ -1452,59 +1442,21 @@ async function zacniHovor(rawCislo, idObj, kodAktivity){
     poznamka: 'Ústredňa ' + USTREDNA_CISLO + (kod ? ' · kód ' + kod : '')
   }).catch(e => console.warn('Hovor log zlyhal:', e.message));
 
-  if(HOVOR_REZIM === 'phonelink'){
-    // Priame volanie zákazníkovi (fallback)
-    window.location.href = 'tel:' + cislo;
-    toast('📞 Volám ' + cislo);
-  } else if(HOVOR_REZIM === 'ai'){
-    toast('🤖 AI volanie zatiaľ nie je implementované');
-  } else if(HOVOR_REZIM === 'ustredna-auto'){
-    if(kod){
-      // Celá sekvencia v jednom tel: URI – ústredňa, pauza, číslo#, pauza, kód#
-      window.location.href = 'tel:' + USTREDNA_CISLO + USTREDNA_PAUZA + lokal + '#' + USTREDNA_PAUZA + kod + '#';
-    } else {
-      toast('⚠ Chýba kód aktivity – vytáčam len ústredňu, kód doplň ručne');
-      window.location.href = 'tel:' + USTREDNA_CISLO;
-    }
-    zobrazUstrednaPanel(lokal, kod, true);
-  } else {
-    // 'ustredna-asist' (predvolené) – vytoč ústredňu a ukáž panel s údajmi
-    if(!kod) toast('⚠ Chýba kód aktivity – po spojení ho doplň ručne');
-    window.location.href = 'tel:' + USTREDNA_CISLO;
-    zobrazUstrednaPanel(lokal, kod, false);
-  }
+  // Asistovaný režim – vytoč ústredňu a ukáž panel s údajmi na ručné naťukanie po IVR.
+  if(!kod) toast('⚠ Chýba kód aktivity – po spojení ho doplň ručne');
+  window.location.href = 'tel:' + USTREDNA_CISLO;
+  zobrazUstrednaPanel(lokal, kod, false);
 }
 
 // Panel asistenta – ukáže číslo zákazníka a kód aktivity na zadanie do ústredne.
 function zobrazUstrednaPanel(lokal, kod, auto){
   document.getElementById('ust-cislo').textContent = lokal || '–';
   document.getElementById('ust-kod').textContent   = kod   || '–';
-  document.getElementById('ust-info').innerHTML = auto
-    ? 'Automaticky vytáčam cez ústredňu <b>0244851598</b>. Ak nereaguje na tóny, naťukaj ručne:'
-    : 'Ústredňa <b>0244851598</b> sa vytáča. Po výzve naťukaj na telefóne:';
+  document.getElementById('ust-info').innerHTML = 'Ústredňa <b>0244851598</b> sa vytáča. Po výzve naťukaj na telefóne:';
   document.getElementById('ustredna-modal').style.display = 'block';
   initUstrednaDrag();
-  updateHovorModeUI();
 }
 function zatvorUstredna(){ document.getElementById('ustredna-modal').style.display = 'none'; }
-
-// Prepínač spôsobu volania (uloží sa do localStorage, platí pre ďalšie hovory).
-function nastavHovorRezim(m){
-  HOVOR_REZIM = m;
-  try{ localStorage.setItem('hovor_rezim', m); }catch(e){}
-  updateHovorModeUI();
-  toast(m === 'ustredna-auto' ? 'Režim: Automatický (DTMF)' : 'Režim: Asistovaný');
-}
-function updateHovorModeUI(){
-  const a=document.getElementById('ust-mode-asist'), b=document.getElementById('ust-mode-auto');
-  if(!a||!b) return;
-  const base='flex:1;padding:7px 4px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid;';
-  const act='background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700';
-  const ina='background:#fff;color:#475569;border-color:#cbd5e1;font-weight:500';
-  const isAuto = HOVOR_REZIM==='ustredna-auto';
-  a.style.cssText = base + (isAuto?ina:act);
-  b.style.cssText = base + (isAuto?act:ina);
-}
 
 // Presúvateľnosť panela – ťahanie za hlavičku (idempotentné).
 let _ustDragInit=false;
@@ -2291,6 +2243,9 @@ async function mwfLoad(){
         telefon:        m.parsed?.poznamky||'',
         kod_aktivity:   m.parsed?.kod_aktivity||'',
         region:         m.parsed?.region||'',  // ECV okres zo subjectu/PDF
+        cas_od:         m.parsed?.cas_od||'',  // Termín z predaja: čas od
+        cas_do:         m.parsed?.cas_do||'',
+        termin_z_predaja: !!m.parsed?.termin_z_predaja,
         mail_uid:       m.mail_uid,
         subject:        m.subject,
         _is_dup:        !!MOCK_OBJ.find(o=>o.id_obj===m.parsed?.id_obj),
@@ -2342,6 +2297,26 @@ function mwfZapis(idx){
   // Región (ECV okres) – z mailu/PDF primárne, inak skús detekciu z obce v adrese
   const _regEl = document.getElementById('n-region');
   if(_regEl){ _regEl.value = (it.region || detectOkres(it.adresa||'') || '').toUpperCase(); }
+  // Termín z predaja: ST dohodol konkrétny termín so zákazníkom → predvyplň
+  // dátum, časové okno a označ v poznámke (frontend potom v zápise preskočí pre-rezerváciu).
+  if(it.termin_z_predaja){
+    if(it.termin_d || it.termin_d_iso){ /* fallback, nepouž. */ }
+    if(it.cas_od){
+      const _odEl=document.getElementById('n-cas-od');
+      if(_odEl){ _odEl.value=it.cas_od; onCasOdChange('n'); }
+      // Auto-vyplnené cas_do prepíšeme presnou hodnotou z PDF (môže byť netypicky 2h)
+      const _doEl=document.getElementById('n-cas-do');
+      if(_doEl && it.cas_do){ _doEl.value=it.cas_do; }
+    }
+    const _poznEl=document.getElementById('n-pozn');
+    if(_poznEl){
+      const cur=(_poznEl.value||'').trim();
+      const marker='Termín z predaja';
+      if(!cur.toLowerCase().includes(marker.toLowerCase())){
+        _poznEl.value = cur ? `${cur}, ${marker}` : marker;
+      }
+    }
+  }
   aiDone=false;document.getElementById('n-ai-hint').style.display='none';
   aiTrigger();
   setStatus(`MWF: predvyplnené – ${it.id_objednavky}`,'info');toast(`Predvyplnené: ${it.id_objednavky}`);
@@ -3133,6 +3108,17 @@ function onIdInput(){
 // ════════════════════════════════════════════════════════════
 // ZÁPIS NOVEJ OBJEDNÁVKY
 // ════════════════════════════════════════════════════════════
+// Helper: zachová dispečérkinu poznámku a REZ marker iba aktualizuje/pridá.
+// Ak v poznámke je existujúci 'REZxx, z DDMMYYYY na DDMMYYYY' → prepíše ho novým textom.
+// Inak nový REZ text pridá cez čiarku (alebo nastaví ak pozn bola prázdna).
+function _aktualizujRezVPozn(pozn, rezTxt){
+  const re = /REZ\d+\s*,\s*z\s+\d{8}\s+na\s+\d{8}/i;
+  const cur = (pozn||'').trim();
+  if(re.test(cur)) return cur.replace(re, rezTxt);
+  if(!cur) return rezTxt;
+  return `${cur}, ${rezTxt}`;
+}
+
 function zapisObjednavku(){
   const idObj=document.getElementById('n-id').value.trim().toUpperCase();
   const meno=document.getElementById('n-meno').value.trim();
@@ -3169,8 +3155,13 @@ function zapisObjednavku(){
   const add_txt=document.getElementById('n-add').value.trim().toUpperCase();
   let farba=colorFromStav(currentStavNova);
   let pozn=document.getElementById('n-pozn').value.trim();
-  if(add_txt==='A'&&plan&&lt&&plan>lt&&currentStavNova!=='hotova'&&currentStavNova!=='storno'){
-    farba='modra';pozn=`REZ01, z ${fmtRezD(lt)} na ${fmtRezD(plan)}`;
+  // Detekcia "Termín z predaja" v poznámke – ST dohodol konkrétny termín so zákazníkom,
+  // má výnimku z pre-rezervácie (aj keď plan > LT, nemení sa farba a nepridáva REZ).
+  const _isTzP = /Termín\s*z\s*predaja/i.test(pozn);
+  if(add_txt==='A'&&plan&&lt&&plan>lt&&currentStavNova!=='hotova'&&currentStavNova!=='storno' && !_isTzP){
+    farba='modra';
+    // Zachovaj existujúcu poznámku – REZ text iba pridaj cez čiarku (nepremaž)
+    pozn = _aktualizujRezVPozn(pozn, `REZ01, z ${fmtRezD(lt)} na ${fmtRezD(plan)}`);
   }
   _casOdSel('n');
   const nCasOd=(document.getElementById('n-cas-od')||{}).value||'';
@@ -3409,7 +3400,7 @@ function renderPrCapTbl(f,t){
   const wrap=document.getElementById('pr-cap-wrap');
   const dates=getDates(f,t);
   const grid={};
-  MOCK_OBJ.forEach(o=>{if(o.farba!=='modra'||o.real||!o.zdroj)return;if(!o.plan||o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];if(o.adresa)grid[o.zdroj][o.plan].push(o.adresa);});
+  MOCK_OBJ.forEach(o=>{if(o.farba!=='modra'||o.real||!o.zdroj)return;if(!o.plan||o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const tipItem=o.cas_od?`${o.adresa||''} ${o.cas_od}–${o.cas_do}`:(o.adresa||'');if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
   const techs=Object.keys(grid).sort();
   if(!techs.length){wrap.innerHTML='<div style="padding:10px;color:var(--muted);font-size:11px">Žiadne pre-rezervované.</div>';return;}
   let h=`<table class="cap-tbl"><thead><tr><th>Technik</th>`;
@@ -4039,9 +4030,15 @@ function saveEdit(){
   const add_txt=document.getElementById('e-add').value.trim().toUpperCase();
   let farba=colorFromStav(editStav);
   let pozn=document.getElementById('e-pozn').value.trim();
-  if(add_txt==='A'&&plan&&lt&&plan>lt&&editStav!=='hotova'&&editStav!=='storno'){
+  // Termín z predaja = výnimka z pre-rezervácie (ST dohodol termín so zákazníkom)
+  const _isTzPE = /Termín\s*z\s*predaja/i.test(pozn);
+  if(add_txt==='A'&&plan&&lt&&plan>lt&&editStav!=='hotova'&&editStav!=='storno' && !_isTzPE){
     farba='modra';
-    if(plan!==editOrigPlan){const nr=Math.min(editOrigRez+1,99);pozn=`REZ${String(nr).padStart(2,'0')}, z ${fmtRezD(editOrigPlan||lt)} na ${fmtRezD(plan)}`;}
+    if(plan!==editOrigPlan){
+      const nr=Math.min(editOrigRez+1,99);
+      // Zachovaj existujúcu poznámku – REZxx iba aktualizuj/pridaj cez čiarku
+      pozn=_aktualizujRezVPozn(pozn, `REZ${String(nr).padStart(2,'0')}, z ${fmtRezD(editOrigPlan||lt)} na ${fmtRezD(plan)}`);
+    }
   }
   const o=MOCK_OBJ[oi];
   o.meno=document.getElementById('e-meno').value.trim();o.adresa=document.getElementById('e-adresa').value.trim();
