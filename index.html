@@ -2698,6 +2698,24 @@ function aiSkorTechnika(meno, planIso, typ, balik, region){
        + regionMatch* AI_CONFIG.W_REGION;
 }
 
+// Posledný AI návrh – uloží sa po každom behu aiTrigger pre účely AI logu.
+// Štruktúra: { technik, plan, dovod, skore, region, top3, vstupy } | null
+let lastAiResult = null;
+
+// Vyhodnotí TOP-3 kandidátov pre daný deň (alternatívy ku hlavnému návrhu).
+// Slúži pre AI log – aby sme videli, na koho 2./3. by AI prikývol.
+function aiTop3PreDen(typ, balik, planIso, okres, scoreRegion){
+  if(!planIso) return [];
+  const cand = aiKvalifikovaniTechnici(typ, balik, planIso, okres);
+  const out = cand.map(m => ({
+    technik: m,
+    plan:    planIso,
+    skore:   +aiSkorTechnika(m, planIso, typ, balik, scoreRegion).toFixed(2)
+  }));
+  out.sort((a,b) => a.skore - b.skore);  // menšie skóre = lepšie
+  return out.slice(0, 3);
+}
+
 // Hlavná rozhodovacia rutina: vyber najlepšieho technika pre cieľový deň + dátum.
 // Vracia objekt { technik, plan, prekLT, dovod } – pri konflikte technik=null.
 // dovod: 'ok' | 'weiss-kvota' | 'no-skills' | 'no-capacity' | 'no-region' | 'pre-rezervacia'
@@ -2999,6 +3017,21 @@ function aiTrigger(){
   const okresVal = ((okresEl && okresEl.value) || '').trim().toUpperCase() || detectOkres(adresa);
   const result = aiVyberKandidata(typ, balik, adresa, lt, isAdd, aiMinPlanDate(), okresVal);
   aiDone = true;
+  // Uložíme komplet kontext pre AI log – top3 alternatívy pre cieľový deň + vstupy
+  lastAiResult = {
+    technik:  result.technik || '',
+    plan:     result.plan    || '',
+    dovod:    result.dovod   || '',
+    skore:    result.skore ? parseFloat(result.skore) : null,
+    region:   result.region  || '',
+    top3:     aiTop3PreDen(typ, balik, result.plan, okresVal, aiDetectRegion(adresa)),
+    vstupy: {
+      typ, balik, adresa,
+      region:  okresVal,
+      lt,
+      add_txt: isAdd ? 'A' : '',
+    },
+  };
   // Vždy prepíš plán
   document.getElementById('n-plan').value = result.plan;
   // Technika len ak je v poli prázdno (dispečérka môže manuálne prepísať).
@@ -3215,6 +3248,38 @@ function zapisObjednavku(){
   (dup ? api('PATCH',`/api/objednavky/${idObj}`, apiData)
        : api('POST','/api/objednavky', apiData))
     .catch(e=>{ toast('⚠ API chyba: '+e.message); setStatus('Chyba uloženia','err'); });
+  // AI log – shadow logging AI návrhu vs. skutočnej voľby (event='create').
+  // Beží fire-and-forget – chyba logu nesmie ovplyvniť zápis objednávky.
+  _sendAiLog('create', idObj, novyZaznam);
+  // Vyčisti lastAiResult – ďalšia objednávka začne odznova
+  lastAiResult = null;
+}
+
+// Pošle záznam do /api/ai_log. Volaný po úspešnom zápise/edite objednávky.
+// Tichý fire-and-forget – zlyhanie iba zalogujeme do console (frontend nesmie blokovať).
+// Volá sa LEN ak lastAiResult existuje (čiže AI mal dostatok vstupov pre návrh).
+function _sendAiLog(event, idObj, obj){
+  if(!lastAiResult) return;  // AI nebol volaný (málo vstupov) – nezapisuj
+  try{
+    const v = lastAiResult.vstupy || {};
+    // termin_z_predaja: detekujeme v poznámke (rovnaký vzor ako vo zapisObjednavku)
+    const tzp = /Termín\s*z\s*predaja/i.test(obj.pozn || '');
+    const stredisko = (window.AKT_USER && AKT_USER.stredisko) || obj.stredisko || '';
+    const payload = {
+      event, id_obj: idObj || '', stredisko,
+      typ: v.typ||'', balik: v.balik||'', adresa: v.adresa||'',
+      region: v.region||'', lt: v.lt||null, add_txt: v.add_txt||'',
+      termin_z_predaja: tzp ? 1 : 0,
+      ai_technik: lastAiResult.technik || '',
+      ai_plan:    lastAiResult.plan    || null,
+      ai_dovod:   lastAiResult.dovod   || '',
+      ai_skore:   lastAiResult.skore,
+      ai_top3:    lastAiResult.top3 || [],
+      zvol_technik: obj.zdroj || '',
+      zvol_plan:    obj.plan  || null,
+    };
+    api('POST','/api/ai_log', payload).catch(e => console.warn('AI log zlyhal:', e.message));
+  }catch(e){ console.warn('AI log výnimka:', e); }
 }
 
 function vymazatFormu(){
@@ -3966,13 +4031,14 @@ window.addEventListener('beforeunload', () => {
 // ════════════════════════════════════════════════════════════
 // EDIT DIALOG
 // ════════════════════════════════════════════════════════════
-let editCurrentId=null,editOrigPlan=null,editOrigRez=0,editOrigObj=null;
+let editCurrentId=null,editOrigPlan=null,editOrigRez=0,editOrigObj=null,editOrigTechnik=null;
 function otvorEditModal(id_obj){
   const o=MOCK_OBJ.find(x=>x.id_obj===id_obj);if(!o)return;
   const rola=currentUser?.rola||'dispečér';
   // Operátor a vedenie – žiadna editácia
   if(rola==='operátor'||rola==='vedenie')return;
   editCurrentId=id_obj;editOrigPlan=o.plan||null;
+  editOrigTechnik=o.zdroj||'';
   const rm=o.pozn.match(/REZ\s*(\d{1,2})/);editOrigRez=rm?parseInt(rm[1]):0;
   // Snapshot pre diff histórie
   editOrigObj={meno:o.meno||'',adresa:o.adresa||'',typ:o.typ||'',balik:o.balik||'',
@@ -4009,6 +4075,33 @@ function otvorEditModal(id_obj){
   // Pokus o získanie locku – asynchrónne, dialóg je už otvorený
   // Pri konflikte sa banner zobrazí a polia sa zablokujú (read-only mode B)
   LockManager.acquire(id_obj);
+  // Tichý AI výpočet pre účely AI logu – BEZ prepísania UI. Slúži aby sme pri uložení
+  // vedeli porovnať voľbu dispečérky s tým, čo by AI navrhol "teraz" na rovnaké vstupy.
+  // Beží len ak má objednávka dostatočné vstupy (typ + balík + LT).
+  lastAiResult = _vypocitajAiTichoPreEdit(o);
+}
+
+// Tichá verzia AI agenta pre Edit – vráti rovnakú štruktúru ako lastAiResult,
+// ale NEPREPÍŠE žiadne UI polia. Vstupy berieme z objednávky (pôvodný stav).
+function _vypocitajAiTichoPreEdit(o){
+  if(!o || !o.typ || !o.balik || !o.lt) return null;
+  try {
+    const isAdd  = ((o.add_txt||'').trim().toUpperCase()==='A');
+    const okres  = ((o.region||'').trim().toUpperCase()) || detectOkres(o.adresa||'');
+    const result = aiVyberKandidata(o.typ, o.balik, o.adresa||'', o.lt, isAdd, aiMinPlanDate(), okres);
+    return {
+      technik: result.technik || '',
+      plan:    result.plan    || '',
+      dovod:   result.dovod   || '',
+      skore:   result.skore ? parseFloat(result.skore) : null,
+      region:  result.region  || '',
+      top3:    aiTop3PreDen(o.typ, o.balik, result.plan, okres, aiDetectRegion(o.adresa||'')),
+      vstupy: {
+        typ: o.typ, balik: o.balik, adresa: o.adresa||'',
+        region: okres, lt: o.lt, add_txt: isAdd?'A':'',
+      },
+    };
+  } catch(e){ console.warn('AI tichý výpočet zlyhal:', e); return null; }
 }
 function closeEdit(){
   // Pri zatvorení uvoľni lock (asynchrónne, neblokuje UI)
@@ -4093,6 +4186,14 @@ function saveEdit(){
   }
   api('PATCH',`/api/objednavky/${editCurrentId}`, mockToApi(o))
     .catch(e=>toast('⚠ API chyba: '+e.message));
+  // AI log pre EDIT – iba ak sa zmenil technik alebo plán oproti pôvodu.
+  // Edit môže byť reakcia na realitu (zákazník chce iný termín), takže ho logujeme s event='edit'
+  // a pri analýze sa dá filtrovať proti event='create' (čistá preferencia dispečérky).
+  const _zmTech = (editOrigTechnik||'') !== (o.zdroj||'');
+  const _zmPlan = (editOrigPlan||'')    !== (o.plan ||'');
+  if((_zmTech || _zmPlan) && lastAiResult){
+    _sendAiLog('edit', editCurrentId, o);
+  }
 }
 function uzavriDnes(){
   const oi=MOCK_OBJ.findIndex(o=>o.id_obj===editCurrentId);if(oi<0)return;
