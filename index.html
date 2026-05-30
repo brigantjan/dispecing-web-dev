@@ -2716,6 +2716,54 @@ function aiTop3PreDen(typ, balik, planIso, okres, scoreRegion){
   return out.slice(0, 3);
 }
 
+// Termín z predaja: scoring technika na ZAFIXOVANÝ dátum (dohodnutý ST so zákazníkom).
+// Nehľadá alternatívne dni – plán je daný. Vyberie technika s najlepším skóre pre ten deň,
+// ktorý má skills + okres + nie je na dovolenke + má kapacitu pod HARD_MAX.
+// Dôvody (oddelené od bežných pre prehľadnosť v logu/UI):
+//   'ok-tzp'          – našiel technika
+//   'no-skills-tzp'   – nikto so skills pre typ+balík
+//   'no-region-tzp'   – nikto neobsluhuje okres
+//   'no-capacity-tzp' – technici sú v ten deň plne vyťažení (≥HARD_MAX)
+function aiVyberKandidataForDate(typ, balik, adresa, dateIso, okres){
+  const scoreRegion = aiDetectRegion(adresa);
+  const kand = aiKvalifikovaniTechnici(typ, balik, dateIso, okres);
+  if(kand.length === 0){
+    // Diagnóza prečo nikto: skills × okres
+    const ktosiSoSkills = TECHNICI.some(m => aiTechnikMaSkills(m, typ, balik));
+    if(okres && ktosiSoSkills){
+      const ktosiSRegionom = TECHNICI.some(m =>
+        aiTechnikMaSkills(m, typ, balik) && technikObsluhujeOkres(m, okres));
+      if(!ktosiSRegionom){
+        return { technik: null, plan: dateIso, prekLT: false, dovod: 'no-region-tzp' };
+      }
+    }
+    return { technik: null, plan: dateIso, prekLT: false,
+             dovod: ktosiSoSkills ? 'no-capacity-tzp' : 'no-skills-tzp' };
+  }
+  // Vyberáme najlepšieho podľa skóre v rámci HARD_MAX (TzP smie ísť nad SOFT limity –
+  // termín je dohodnutý so zákazníkom a posun nie je možnosť).
+  let best = null;
+  for(const meno of kand){
+    const td  = TECHNICI_DETAIL[meno] || {};
+    const tim = td.tim_velkost || 1;
+    const raw = aiPocetObjPreDen(meno, dateIso);
+    const eff = raw / tim;
+    if(eff >= AI_CONFIG.HARD_MAX) continue;     // úplne plný, neuvažuj
+    const skore    = aiSkorTechnika(meno, dateIso, typ, balik, scoreRegion);
+    const tiebreak = aiPocetObjZaTydzen(meno, dateIso, AI_CONFIG.WEEK_LOOKBACK) / tim;
+    if(!best || skore < best.skore - 0.001 ||
+       (Math.abs(skore-best.skore) < 0.001 && tiebreak < best.tiebreak)){
+      best = { technik: meno, skore, tiebreak };
+    }
+  }
+  if(best){
+    return { technik: best.technik, plan: dateIso, prekLT: false, dovod: 'ok-tzp',
+             skore: best.skore.toFixed(2), region: scoreRegion };
+  }
+  // Všetci nad HARD_MAX
+  return { technik: null, plan: dateIso, prekLT: false, dovod: 'no-capacity-tzp' };
+}
+
 // Hlavná rozhodovacia rutina: vyber najlepšieho technika pre cieľový deň + dátum.
 // Vracia objekt { technik, plan, prekLT, dovod } – pri konflikte technik=null.
 // dovod: 'ok' | 'weiss-kvota' | 'no-skills' | 'no-capacity' | 'no-region' | 'pre-rezervacia'
@@ -3015,7 +3063,18 @@ function aiTrigger(){
   // Okres (ECV) – primárne zo skrytého poľa n-region (z mailu/PDF), fallback detect z adresy
   const okresEl  = document.getElementById('n-region');
   const okresVal = ((okresEl && okresEl.value) || '').trim().toUpperCase() || detectOkres(adresa);
-  const result = aiVyberKandidata(typ, balik, adresa, lt, isAdd, aiMinPlanDate(), okresVal);
+
+  // TERMÍN Z PREDAJA: ak má objednávka v poznámke marker "Termín z predaja" A už je vyplnený
+  // plán z PDF (ST dohodol so zákazníkom), AI agent NESMIE prepísať plán. Iba vyberie
+  // najlepšieho technika pre ten zafixovaný dátum.
+  const _poznVal = (document.getElementById('n-pozn')?.value || '').trim();
+  const _planValPre = (document.getElementById('n-plan')?.value || '').trim();
+  const _isTzP = _poznVal.length > 0 && _planValPre.length > 0
+                 && /Termín\s*z\s*predaja/i.test(_poznVal);
+
+  const result = _isTzP
+    ? aiVyberKandidataForDate(typ, balik, adresa, _planValPre, okresVal)
+    : aiVyberKandidata(typ, balik, adresa, lt, isAdd, aiMinPlanDate(), okresVal);
   aiDone = true;
   // Uložíme komplet kontext pre AI log – top3 alternatívy pre cieľový deň + vstupy
   lastAiResult = {
@@ -3032,8 +3091,10 @@ function aiTrigger(){
       add_txt: isAdd ? 'A' : '',
     },
   };
-  // Vždy prepíš plán
-  document.getElementById('n-plan').value = result.plan;
+  // Plán prepíšeme IBA ak nie je Termín z predaja. Pri TzP je plán daný ST a chránený.
+  if(!_isTzP){
+    document.getElementById('n-plan').value = result.plan;
+  }
   // Technika len ak je v poli prázdno (dispečérka môže manuálne prepísať).
   // Ak agent vráti null (konflikt), n-technik vyčistíme – aj keby sme tam mali zostatok z drafta.
   const techEl = document.getElementById('n-technik');
@@ -3089,6 +3150,26 @@ function aiTrigger(){
     hint.innerHTML = `💡 AI návrh: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${regionLbl}${twLabel}`
                    + ` <span style="color:#94a3b8;font-size:11px">(skóre ${result.skore})</span>`
                    + prerezHint;
+  }
+  else if(result.dovod === 'ok-tzp'){
+    hint.className = 'ai-hint ok';
+    hint.innerHTML = `🎯 <strong>Termín z predaja</strong> ${planFmt} – navrhujem technika <strong>${result.technik}</strong>${regionLbl}${twLabel}`
+                   + ` <span style="color:#94a3b8;font-size:11px">(skóre ${result.skore})</span>`;
+  }
+  else if(result.dovod === 'no-capacity-tzp'){
+    hint.className = 'ai-hint warn';
+    hint.innerHTML = `⚠ <strong>Termín z predaja</strong> ${planFmt} – v ten deň sú technici plne vyťažení.`
+                   + ` <span style="font-size:11px">Termín je dohodnutý so zákazníkom, technika prirad' ručne alebo prerozdeľ kapacitu.</span>`;
+  }
+  else if(result.dovod === 'no-region-tzp'){
+    hint.className = 'ai-hint warn';
+    hint.innerHTML = `⚠ <strong>Termín z predaja</strong> ${planFmt} – žiadny technik neobsluhuje okres <strong>${okresVal}</strong>.`
+                   + ` <span style="font-size:11px">Skontroluj 🗺️ Regióny v Správe používateľov.</span>`;
+  }
+  else if(result.dovod === 'no-skills-tzp'){
+    hint.className = 'ai-hint warn';
+    hint.innerHTML = `⚠ <strong>Termín z predaja</strong> ${planFmt} – žiadny technik nemá v Kvalifikácii ${typ}+${balik}.`
+                   + ` <span style="font-size:11px">Skontroluj nastavenia v Správe používateľov.</span>`;
   }
   else if(result.dovod === 'weiss-kvota'){
     hint.className = 'ai-hint ' + (isPreRez ? 'warn' : 'ok');
@@ -4088,7 +4169,12 @@ function _vypocitajAiTichoPreEdit(o){
   try {
     const isAdd  = ((o.add_txt||'').trim().toUpperCase()==='A');
     const okres  = ((o.region||'').trim().toUpperCase()) || detectOkres(o.adresa||'');
-    const result = aiVyberKandidata(o.typ, o.balik, o.adresa||'', o.lt, isAdd, aiMinPlanDate(), okres);
+    // Termín z predaja: ak má objednávka v poznámke marker a vyplnený plán,
+    // AI agent berie zafixovaný dátum a hľadá technika len pre ten deň.
+    const isTzP = !!(o.plan && o.pozn && /Termín\s*z\s*predaja/i.test(o.pozn));
+    const result = isTzP
+      ? aiVyberKandidataForDate(o.typ, o.balik, o.adresa||'', o.plan, okres)
+      : aiVyberKandidata(o.typ, o.balik, o.adresa||'', o.lt, isAdd, aiMinPlanDate(), okres);
     return {
       technik: result.technik || '',
       plan:    result.plan    || '',
