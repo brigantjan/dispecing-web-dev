@@ -4227,6 +4227,9 @@ function saveEdit(){
   o.telefon=document.getElementById('e-telefon').value.trim();
   o.kod_aktivity=document.getElementById('e-kod').value.trim();
   o.region=(document.getElementById('e-region')?.value||'').trim().toUpperCase();
+  // Ak sa objednávka vracia z uzavretia späť na iný stav (prerezerv/planovana/storno),
+  // datum_realizacie musí byť prázdny – inak by showPrerezerv filter (!o.real) objednávku skryl.
+  if(editStav!=='hotova') document.getElementById('e-real').value='';
   o.real=document.getElementById('e-real').value;o.farba=farba;o.zmeneny=now8();
   o.cas_od=document.getElementById('e-cas-od')?.value||'';
   o.cas_do=document.getElementById('e-cas-do')?.value||'';
