@@ -3506,7 +3506,7 @@ function renderCapTbl(f,t){
   const wrap=document.getElementById('cap-wrap');
   const dates=getDates(f,t);
   const grid={};
-  MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj)return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const tipItem=o.cas_od?`${o.adresa||''} ${o.cas_od}–${o.cas_do}`:(o.adresa||'');if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
+  MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj)return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const _bal=o.balik?`[${o.balik}]`:'';const tipItem=o.cas_od?`${o.adresa||''} ${_bal} ${o.cas_od}–${o.cas_do}`.trim():`${o.adresa||''} ${_bal}`.trim();if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
   // Zobrazujeme LEN technikov ktorí majú aspoň jednu objednávku v zobrazenom rozsahu.
   // Pôvodne sa tu pridávali aj prázdne riadky pre VŠETKÝCH z TECHNICI – to spôsobovalo
   // zobrazenie testovacích/neexistujúcich technikov ako "Nový používateľ" s prázdnym riadkom.
@@ -3546,7 +3546,7 @@ function renderPrCapTbl(f,t){
   const wrap=document.getElementById('pr-cap-wrap');
   const dates=getDates(f,t);
   const grid={};
-  MOCK_OBJ.forEach(o=>{if(o.farba!=='modra'||o.real||!o.zdroj)return;if(!o.plan||o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const tipItem=o.cas_od?`${o.adresa||''} ${o.cas_od}–${o.cas_do}`:(o.adresa||'');if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
+  MOCK_OBJ.forEach(o=>{if(o.farba!=='modra'||o.real||!o.zdroj)return;if(!o.plan||o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const _bal=o.balik?`[${o.balik}]`:'';const tipItem=o.cas_od?`${o.adresa||''} ${_bal} ${o.cas_od}–${o.cas_do}`.trim():`${o.adresa||''} ${_bal}`.trim();if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
   const techs=Object.keys(grid).sort();
   if(!techs.length){wrap.innerHTML='<div style="padding:10px;color:var(--muted);font-size:11px">Žiadne pre-rezervované.</div>';return;}
   let h=`<table class="cap-tbl"><thead><tr><th>Technik</th>`;
