@@ -3506,7 +3506,7 @@ function renderCapTbl(f,t){
   const wrap=document.getElementById('cap-wrap');
   const dates=getDates(f,t);
   const grid={};
-  MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj)return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const _bal=o.balik?`[${o.balik}]`:'';const tipItem=o.cas_od?`${o.adresa||''} ${_bal} ${o.cas_od}–${o.cas_do}`.trim():`${o.adresa||''} ${_bal}`.trim();if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
+  MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj||o.farba==='zlta')return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const _bal=o.balik?`[${o.balik}]`:'';const tipItem=o.cas_od?`${o.adresa||''} ${_bal} ${o.cas_od}–${o.cas_do}`.trim():`${o.adresa||''} ${_bal}`.trim();if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
   // Zobrazujeme LEN technikov ktorí majú aspoň jednu objednávku v zobrazenom rozsahu.
   // Pôvodne sa tu pridávali aj prázdne riadky pre VŠETKÝCH z TECHNICI – to spôsobovalo
   // zobrazenie testovacích/neexistujúcich technikov ako "Nový používateľ" s prázdnym riadkom.
@@ -4213,6 +4213,13 @@ function saveEdit(){
   const _isTzPE = /Termín\s*z\s*predaja/i.test(pozn);
   if(add_txt==='A'&&plan&&lt&&plan>lt&&editStav!=='hotova'&&editStav!=='storno' && !_isTzPE){
     farba='modra';
+    // Fix: syncuj editStav a UI tlacidlo – dispecerka dostane vizualnu spatnu vazbu
+    if(editStav!=='prerezerv'){
+      editStav='prerezerv';
+      document.querySelectorAll('#e-stav-opts .stav-opt').forEach(op=>op.className='stav-opt');
+      const _bp=document.querySelector('#e-stav-opts [data-stav="prerezerv"]');
+      if(_bp)_bp.classList.add('active-p');
+    }
     if(plan!==editOrigPlan){
       const nr=Math.min(editOrigRez+1,99);
       // Zachovaj existujúcu poznámku – REZxx iba aktualizuj/pridaj cez čiarku
@@ -4227,9 +4234,9 @@ function saveEdit(){
   o.telefon=document.getElementById('e-telefon').value.trim();
   o.kod_aktivity=document.getElementById('e-kod').value.trim();
   o.region=(document.getElementById('e-region')?.value||'').trim().toUpperCase();
-  // Ak sa objednávka vracia z uzavretia späť na iný stav (prerezerv/planovana/storno),
-  // datum_realizacie musí byť prázdny – inak by showPrerezerv filter (!o.real) objednávku skryl.
-  if(editStav!=='hotova') document.getElementById('e-real').value='';
+  // Vynuluj datum_realizacie pri navrate z uzavretia – ALE NIE pri storno (dispecerka
+  // mohla rucne vyplnit datum realizacie pred stornom) a nie pri hotova.
+  if(editStav!=='hotova' && editStav!=='storno') document.getElementById('e-real').value='';
   o.real=document.getElementById('e-real').value;o.farba=farba;o.zmeneny=now8();
   o.cas_od=document.getElementById('e-cas-od')?.value||'';
   o.cas_do=document.getElementById('e-cas-do')?.value||'';
