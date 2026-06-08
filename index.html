@@ -3664,7 +3664,7 @@ function renderObjTable(){
   else if(quickMode==='prerezerv')rows=rows.filter(o=>o.farba==='modra');
   else if(quickMode==='neplan')rows=rows.filter(isNeplan);
   else if(quickMode==='oneskorene')rows=rows.filter(isOneskoren);
-  else if(quickMode==='dnes'){const dnes=T;rows=rows.filter(o=>o.plan===dnes&&o.farba!=='zlta');}
+  else if(quickMode==='dnes'){const dnes=T;rows=rows.filter(o=>o.plan===dnes);}
   else if(quickMode==='zajtra'){const zajtra=dt(1);rows=rows.filter(o=>o.plan===zajtra&&o.farba!=='zlta');}
   if(q)rows=rows.filter(o=>normDiakr(o.id_obj||'').includes(q)||normDiakr(o.meno||'').includes(q));
   if(fid)rows=rows.filter(o=>normDiakr(o.id_obj||'').includes(fid));
