@@ -1666,7 +1666,7 @@ function dashClickFilter(mode){
 function isOneskoren(o){return o.plan&&o.plan<T&&!o.real&&o.farba!=='zlta'&&o.farba!=='zelena';}
 // Po LT = LT v minulosti, bez realizácie, nie storno (varovný indikátor v topbare)
 // Toto je kritický signál pre dispečérku – musí ich riešiť prerezerváciou.
-function isPoLt(o){return o.lt&&o.lt<T&&!o.real&&o.farba!=='zlta'&&o.farba!=='zelena'&&o.add_txt==='A';}
+function isPoLt(o){return o.lt&&o.plan&&o.plan>o.lt&&!o.real&&o.farba!=='zlta'&&o.farba!=='zelena'&&o.add_txt==='A';}
 function updatePoLtBadge(){
   const badge=document.getElementById('polt-badge');
   if(!badge) return;
@@ -1691,17 +1691,14 @@ function quickFilterPoLt(){
   document.querySelectorAll('[id^="qb-"]').forEach(b=>b.classList.remove('active'));
   const btn=document.getElementById('qb-neukoncene');
   if(btn) btn.classList.add('active');
-  // Aplikuj rozšírený dátumový filter: LT do včerajška vrátane + ADD=A (zhodné s isPoLt)
-  datumFilter.stlpec='lt';
-  datumFilter.od='';
-  datumFilter.do=dt(-1);
+  // Použij fdolt='po' (plan>lt) + ADD=A – presne zhodné s isPoLt logikou
+  document.getElementById('f-dolt').value='po';
   document.getElementById('f-add').value='A';
-  // Vizuálne označ stĺpec LT ako aktívny
+  // Zruš prípadný datumFilter aby neprekážal
+  datumFilter.stlpec=null; datumFilter.od=''; datumFilter.do='';
   document.querySelectorAll('[id^="df-btn-"]').forEach(b=>b.style.color='');
-  const lbl=document.getElementById('df-btn-lt');
-  if(lbl) lbl.style.color='var(--red)';
   renderObjTable();
-  toast('🔍 Filter: Po LT (LT < dnes, neukončené)');
+  toast('🔍 Filter: Po LT (plán > LT, neukončené, ADD=A)');
 }
 // Diagnostika v topbare – počet objednávok, technikov, online stav
 function updateDiagInfo(){
