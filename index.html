@@ -450,7 +450,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div id="mwf-panel" style="padding:5px 8px">
         <div class="mwf-box">
           <div class="mwf-hdr">Objednávky z mailu (Zapíš=predvyplniť | Vymaž=označiť prečítané)
-            <button id="btn-zastupovanie" class="btn btn-xs" style="margin-left:auto;background:#f3f4f6;border:1px solid var(--border2);color:var(--text)" onclick="zastOpenDialog()" title="Zastupovanie iných stredísk – ktoré kódy DOD_Suptel_XX chcem tiež prijímať"><span id="zast-icon">↔</span> <span id="zast-label">Zastupovanie</span></button><button class="btn btn-accent btn-xs" onclick="mwfLoad()">↻ Načítať</button>
+            <button class="btn btn-accent btn-xs" style="margin-left:auto" onclick="mwfLoad()">↻ Načítať</button>
           </div>
           <div id="mwf-list"></div>
         </div>
@@ -1173,8 +1173,7 @@ function startPolling(){
       } else {
         // Race guard: pre objednávky s prebiehajúcim PATCH-om zachovaj lokálnu
         // verziu (server ešte nemusí vedieť o zmene). Ostatné prepíšeme z API
-        // ako doteraz. Po dokončení PATCH-u sa guard cez .finally() uvoľní
-        // a ďalší polling už objednávku prepíše čerstvými DB dátami.
+        // ako doteraz. Po dokončení PATCH-u sa guard cez .finally() uvoľní.
         MOCK_OBJ = rows.map(r=>{
           if(_pendingPatches.has(r.id_obj)){
             const localO = MOCK_OBJ.find(o=>o.id_obj===r.id_obj);
@@ -1338,16 +1337,14 @@ function ts(n){return dt(n)+'T'+(8+Math.floor(Math.random()*9)).toString().padSt
 
 let MOCK_OBJ=[]; // načítané z API
 // Race guard: id_obj objednávok s prebiehajúcim PATCH-om na backend.
-// Kým je id v tomto Set-e, polling ho nesmie prepísať zo servera –
-// server ešte nemusí vedieť o práve odoslanej zmene. Po dokončení
-// PATCH-u sa id automaticky odstráni cez .finally() – ďalší polling
-// už dostane čerstvé DB dáta.
+// Kým je id v Set-e, polling ho nesmie prepísať zo servera – server ešte
+// nemusí vedieť o práve odoslanej zmene. Po dokončení PATCH-u sa id
+// automaticky odstráni cez .finally() – ďalší polling už dostane čerstvé dáta.
 let _pendingPatches = new Set();
 
 // Helper: PATCH objednávky s race guardom.
 // Automaticky pridá/odoberie id z _pendingPatches (chráni pred prekrytím pollingom).
 // opts.silent=true → chyba len do console (bez toast); default = toast pri chybe.
-// Vždy vracia Promise – ak volajúci potrebuje reťaziť .then(), môže.
 function patchObj(id, payload, opts){
   const silent = opts && opts.silent;
   _pendingPatches.add(id);
@@ -1355,7 +1352,12 @@ function patchObj(id, payload, opts){
                      // aj keby sa premenná v callerovi medzitým zmenila
   return api('PATCH', `/api/objednavky/${_pid}`, payload)
     .catch(silent ? ()=>{} : e => toast('⚠ API chyba: '+e.message))
-    .finally(() => _pendingPatches.delete(_pid));
+    .finally(() => {
+      // Buffer 2s pred uvoľnením guardu: chráni pred in-flight polling GET
+      // response, ktorý mohol byť spustený PRED alebo POČAS PATCH-u a doraziť AŽ PO
+      // .finally() – bez tohto guardu by prepísal MOCK_OBJ so starými dátami.
+      setTimeout(() => _pendingPatches.delete(_pid), 2000);
+    });
 }
 
 // Notifikácie (technikmi zmenené objednávky)
@@ -1818,15 +1820,6 @@ function doLogin(){
     currentUser=user;
     // Reset MWF fronty pri každom novom prihlásení
     mwfQueue=mwfQueue.filter(()=>false);
-    // Načítaj rozšírené user údaje (imap_kody, imap_zastupovanie, imap_zastupovanie_do)
-    api('GET','/api/me').then(me=>{
-      if(me){
-        currentUser.imap_kody          = me.imap_kody||'';
-        currentUser.imap_zastupovanie  = me.imap_zastupovanie||'';
-        currentUser.imap_zastupovanie_do = me.imap_zastupovanie_do||'';
-        zastRefreshBadge();
-      }
-    }).catch(()=>{});
     document.getElementById('uav').textContent=user.ini;
     document.getElementById('uname').textContent=user.meno;
     document.getElementById('urola').textContent=user.rola;
@@ -3333,7 +3326,9 @@ function zapisObjednavku(){
     telefon:document.getElementById('n-telefon').value.trim(),
     kod_aktivity:document.getElementById('n-kod').value.trim(),
     region:(document.getElementById('n-region')?.value||'').trim().toUpperCase(),
-    zmeneny:now8(), cas_od:nCasOd, cas_do:nCasDo,
+    // Klientský timestamp pre správne triedenie v renderRecent() ihneď po zápise.
+    // Backend prepíše presnú hodnotu pri najbližšom polling GET.
+    zmeneny:now8(), vytvoreny:now8(), cas_od:nCasOd, cas_do:nCasDo,
   };
   // Upozornenie na prekrývajúce sa časové okno
   if(nCasOd&&novyZaznam.zdroj&&novyZaznam.plan){
@@ -3373,9 +3368,8 @@ function zapisObjednavku(){
     const _pid = idObj;
     api('PATCH', `/api/objednavky/${_pid}`, apiData)
       .catch(e => { toast('⚠ API chyba: '+e.message); setStatus('Chyba uloženia','err'); })
-      .finally(() => _pendingPatches.delete(_pid));
+      .finally(() => setTimeout(() => _pendingPatches.delete(_pid), 2000));
   } else {
-    // POST novej – nič v MOCK_OBJ ešte nemá server, guard netreba
     api('POST', '/api/objednavky', apiData)
       .catch(e => { toast('⚠ API chyba: '+e.message); setStatus('Chyba uloženia','err'); });
   }
@@ -4841,7 +4835,7 @@ function updateUser(idx,field,val){
     DEMO_USERS[idx][field]=s;
     payload[field]=s;
   }
-  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email','stredisko','regiony','imap_kody','imap_zastupovanie','imap_zastupovanie_do'].includes(field))
+  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email','stredisko','regiony'].includes(field))
     payload[field]=val;
   else if(field==='technik_email_notify'){
     const iv=(val===1||val==='1'||val===true)?1:0;
@@ -6036,172 +6030,13 @@ async function checkPageVersion() {
   } catch (e) { /* sieť nedostupná */ }
 }
 
-setTimeout(checkPageVersion, 30_000);          // prvá kontrola po 30s
-setInterval(checkPageVersion, 15 * 60 * 1000); // každých 15 minút
-
-// ══════ Zastupovanie – JS funkcie ══════
-// Preset kódy (najbežnejšie ECV/stredisko kódy okolo TN a BA). Admin môže upraviť.
-const ZAST_PRESETS = ['SE','TO','MY','NM','PN','IL','PB','MA','PK','SC','DS','GA'];
-
-function zastRefreshBadge(){
-  const btn = document.getElementById('btn-zastupovanie');
-  const lbl = document.getElementById('zast-label');
-  const ico = document.getElementById('zast-icon');
-  if(!btn||!lbl||!ico||!currentUser) return;
-  // Ak user nemá nastavené vlastné imap_kody, zastupovanie by odfiltrovalo aj
-  // jeho vlastné maily (prázdny whitelist + extra kódy = filter iba na extra).
-  // Skryj tlačidlo, aby sa dispečérka omylom nezablokovala. Tlačidlo sa
-  // automaticky objaví po nastavení imap_kody adminom a re-loginе.
-  const hasKody = (currentUser.imap_kody||'').trim() !== '';
-  if(!hasKody){ btn.style.display='none'; return; }
-  btn.style.display=''; // reset – vráti CSS default
-  const zast = (currentUser.imap_zastupovanie||'').trim();
-  const zastDo = (currentUser.imap_zastupovanie_do||'').trim();
-  let expirovane = false;
-  if(zastDo && zast){
-    try{
-      const d = new Date(zastDo.slice(0,10)+'T00:00:00');
-      const today = new Date(); today.setHours(0,0,0,0);
-      if(d < today) expirovane = true;
-    }catch(_){}
-  }
-  if(zast && !expirovane){
-    btn.style.background = '#fee2e2';
-    btn.style.border = '1px solid #ef4444';
-    btn.style.color = '#991b1b';
-    btn.style.fontWeight = '600';
-    ico.textContent = '⚠';
-    lbl.textContent = 'Zastupujem: '+zast + (zastDo?' (do '+zastDo.slice(8,10)+'.'+zastDo.slice(5,7)+'.)':'');
-  } else if(zast && expirovane){
-    btn.style.background = '#fef3c7';
-    btn.style.border = '1px solid #d97706';
-    btn.style.color = '#92400e';
-    btn.style.fontWeight = '500';
-    ico.textContent = '⏱';
-    lbl.textContent = 'Zastupovanie expirovalo';
-  } else {
-    btn.style.background = '#f3f4f6';
-    btn.style.border = '1px solid var(--border2)';
-    btn.style.color = 'var(--text)';
-    btn.style.fontWeight = '400';
-    ico.textContent = '↔';
-    lbl.textContent = 'Zastupovanie';
-  }
-}
-
-function zastOpenDialog(){
-  if(!currentUser){ toast('⚠ Nie ste prihlásený'); return; }
-  const inp = document.getElementById('zast-input');
-  const doInp = document.getElementById('zast-do');
-  inp.value = (currentUser.imap_zastupovanie||'').toUpperCase();
-  doInp.value = (currentUser.imap_zastupovanie_do||'').slice(0,10);
-  zastRenderPresets();
-  document.getElementById('zast-overlay').classList.remove('hidden');
-  setTimeout(()=>inp.focus(), 50);
-}
-
-function zastCloseDialog(){
-  document.getElementById('zast-overlay').classList.add('hidden');
-}
-
-function zastNormalizeInput(){
-  const inp = document.getElementById('zast-input');
-  const parts = (inp.value||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
-  const seen = new Set(); const uniq = [];
-  parts.forEach(p=>{ if(!seen.has(p)){ seen.add(p); uniq.push(p); } });
-  inp.value = uniq.join(',');
-  zastRenderPresets();
-}
-
-function zastRenderPresets(){
-  const box = document.getElementById('zast-presets');
-  const inp = document.getElementById('zast-input');
-  const cur = new Set((inp.value||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean));
-  const vlastne = new Set(((currentUser&&currentUser.imap_kody)||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean));
-  box.innerHTML = ZAST_PRESETS.filter(k=>!vlastne.has(k)).map(k=>{
-    const active = cur.has(k);
-    return '<button type="button" onclick="zastTogglePreset(\''+k+'\')" style="padding:4px 10px;border-radius:14px;border:1px solid '+(active?'#ef4444':'#d1d5db')+';background:'+(active?'#fee2e2':'#fff')+';color:'+(active?'#991b1b':'#333')+';font-size:12px;cursor:pointer;font-family:var(--mono);font-weight:'+(active?'600':'400')+'">'+k+'</button>';
-  }).join('');
-}
-
-function zastTogglePreset(code){
-  const inp = document.getElementById('zast-input');
-  const parts = (inp.value||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
-  const idx = parts.indexOf(code);
-  if(idx>=0) parts.splice(idx,1);
-  else parts.push(code);
-  inp.value = parts.join(',');
-  zastRenderPresets();
-}
-
-async function zastSave(){
-  const inp = document.getElementById('zast-input');
-  const doInp = document.getElementById('zast-do');
-  zastNormalizeInput();
-  const val = inp.value.trim();
-  const doVal = (doInp.value||'').trim();
-  try{
-    await api('PATCH','/api/me/zastupovanie',{
-      imap_zastupovanie: val,
-      imap_zastupovanie_do: doVal || null
-    });
-    currentUser.imap_zastupovanie = val;
-    currentUser.imap_zastupovanie_do = doVal;
-    zastRefreshBadge();
-    zastCloseDialog();
-    toast(val ? ('↔ Zastupujem: '+val+(doVal?' (do '+doVal+')':'')) : '↔ Zastupovanie vypnuté');
-  }catch(e){
-    toast('⚠ Chyba: '+e.message);
-  }
-}
-
-async function zastVypnut(){
-  try{
-    await api('PATCH','/api/me/zastupovanie',{
-      imap_zastupovanie: '',
-      imap_zastupovanie_do: null
-    });
-    currentUser.imap_zastupovanie = '';
-    currentUser.imap_zastupovanie_do = '';
-    zastRefreshBadge();
-    zastCloseDialog();
-    toast('↔ Zastupovanie vypnuté');
-  }catch(e){
-    toast('⚠ Chyba: '+e.message);
-  }
-}
-
+// Detekcia novej verzie stránky VYPNUTÁ (júl 2026).
+// Dôvod: GitHub Pages beží na Fastly CDN s viacerými edge nodes. Aj pre ten istý
+// súbor môžu rôzne edge nodes vracať iný ETag/Last-Modified pri každom HEAD requeste.
+// To spôsobovalo falošné banner upozornenia „Je dostupná nová verzia" aj bez zmeny.
+// Funkcia checkPageVersion() ostáva v kóde pre budúce zapnutie s deterministickým
+// mechanizmom (napr. <meta name="app-version"> alebo /version.txt).
+// setTimeout(checkPageVersion, 30_000);
+// setInterval(checkPageVersion, 15 * 60 * 1000);
 </script>
-
-<!-- ══════ Modálka: Zastupovanie iných stredísk ══════ -->
-<div id="zast-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)zastCloseDialog()">
-  <div style="background:#fff;border-radius:10px;padding:20px 24px;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:var(--font)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <h3 style="margin:0;font-size:16px;font-weight:700">↔ Zastupovanie iných stredísk</h3>
-      <button onclick="zastCloseDialog()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1">×</button>
-    </div>
-    <div style="font-size:12px;color:#555;line-height:1.5;margin-bottom:12px">
-      Zadaj kódy stredísk (DOD_Suptel_<b>XX</b>), ktorých maily má systém naviac čítať okrem tvojich vlastných. Napr. dispečérka TN si pri zastupovaní Senice a Topoľčian nastaví <code>SE,TO</code>.
-    </div>
-    <div style="margin-bottom:8px">
-      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Zastupované kódy (CSV):</label>
-      <input id="zast-input" type="text" placeholder="napr. SE,TO" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-family:var(--mono);font-size:14px;text-transform:uppercase" onblur="zastNormalizeInput()">
-    </div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;color:#666;margin-bottom:4px">Rýchle voľby (klik = pridá/odoberie):</div>
-      <div id="zast-presets" style="display:flex;flex-wrap:wrap;gap:5px"></div>
-    </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Platí do (voliteľné):</label>
-      <input id="zast-do" type="date" style="padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
-      <div style="font-size:11px;color:#666;margin-top:3px">Prázdne = platí bez expirácie. Po tomto dátume sa zastupovanie automaticky ignoruje.</div>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #eee;padding-top:12px">
-      <button onclick="zastVypnut()" style="background:#fee;color:#c00;border:1px solid #fcc;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Vypnúť zastupovanie</button>
-      <button onclick="zastCloseDialog()" style="background:#f3f4f6;color:#333;border:1px solid var(--border2);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Zrušiť</button>
-      <button onclick="zastSave()" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Uložiť</button>
-    </div>
-  </div>
-</div>
-
 </body></html>
