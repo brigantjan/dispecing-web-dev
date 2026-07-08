@@ -4238,7 +4238,12 @@ function closeEdit(){
   LockManager.release();
   document.getElementById('edit-overlay').classList.remove('open');
 }
-function closeEditIfBg(ev){if(ev.target===document.getElementById('edit-overlay'))closeEdit();}
+function closeEditIfBg(ev){
+  // Zámerne NIČ – klik mimo editačnú modálku (na backdrop) už nezatvorí okno.
+  // Ochrana pred stratou práce pri drag-select technika alebo náhodnom klik mimo.
+  // Editačné okno sa zatvorí IBA cez: X, Zrušiť, Uložiť zmeny, Uzavri dnes,
+  // Vystornuj dnes, alebo klávesou ESC (existujúci handler na r. ~5964).
+}
 function saveEdit(){
   // Defenzíva: ak sme v read-only mode (cudzí lock), save nepovolíme
   if(LockManager.isReadOnly){
