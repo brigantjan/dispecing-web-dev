@@ -450,7 +450,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div id="mwf-panel" style="padding:5px 8px">
         <div class="mwf-box">
           <div class="mwf-hdr">Objednávky z mailu (Zapíš=predvyplniť | Vymaž=označiť prečítané)
-            <button class="btn btn-accent btn-xs" style="margin-left:auto" onclick="mwfLoad()">↻ Načítať</button>
+            <button id="btn-zastupujem" class="btn btn-xs" style="margin-left:auto;display:none;background:#f3f4f6;border:1px solid var(--border2);color:var(--text)" onclick="zastupOpen()" title="Zastupujem kolegyňu – čítať aj jej maily"><span id="zastup-icon">🔀</span> <span id="zastup-label">Zastupujem</span></button><button class="btn btn-accent btn-xs" onclick="mwfLoad()">↻ Načítať</button>
           </div>
           <div id="mwf-list"></div>
         </div>
@@ -1820,6 +1820,11 @@ function doLogin(){
     currentUser=user;
     // Reset MWF fronty pri každom novom prihlásení
     mwfQueue=mwfQueue.filter(()=>false);
+    // Kolo B: načítať vlastné sekundárne IMAP účty a zobraziť/skryť Zastupujem tlačidlo
+    api('GET','/api/me/imap_accounts').then(accts=>{
+      currentUser.imap_accounts = Array.isArray(accts) ? accts : [];
+      zastupRefreshBadge();
+    }).catch(()=>{ currentUser.imap_accounts=[]; zastupRefreshBadge(); });
     document.getElementById('uav').textContent=user.ini;
     document.getElementById('uname').textContent=user.meno;
     document.getElementById('urola').textContent=user.rola;
@@ -4241,8 +4246,7 @@ function closeEdit(){
 function closeEditIfBg(ev){
   // Zámerne NIČ – klik mimo editačnú modálku (na backdrop) už nezatvorí okno.
   // Ochrana pred stratou práce pri drag-select technika alebo náhodnom klik mimo.
-  // Editačné okno sa zatvorí IBA cez: X, Zrušiť, Uložiť zmeny, Uzavri dnes,
-  // Vystornuj dnes, alebo klávesou ESC (existujúci handler na r. ~5964).
+  // Zatvor cez: X, Zrušiť, Uložiť zmeny, Uzavri dnes, Vystornuj dnes, alebo ESC.
 }
 function saveEdit(){
   // Defenzíva: ak sme v read-only mode (cudzí lock), save nepovolíme
@@ -4656,6 +4660,38 @@ function toggleDovolenka(idx, checked){
   }
 }
 
+function _imapAcctsForAllUsersAfterRender(){
+  // Po renderUserTable – naplniť zoznam sekundárnych účtov pre každého admin/dispečéra
+  document.querySelectorAll('[id^="imap-accts-list-"]').forEach(el=>{
+    const uid = el.dataset.userId;
+    if(uid) renderImapAccts(uid);
+  });
+}
+
+async function renderImapAccts(uid){
+  const el = document.getElementById('imap-accts-list-'+uid);
+  if(!el) return;
+  try{
+    const accts = await api('GET', `/api/users/${uid}/imap_accounts`);
+    if(!Array.isArray(accts) || accts.length===0){
+      el.innerHTML = '<div style="font-style:italic;color:#9ca3af;padding:4px 0">Žiadne sekundárne účty. Ak dispečérka bude zastupovať kolegyňu, klikni „+ Pridať účet" hore.</div>';
+      return;
+    }
+    el.innerHTML = accts.map(a => `
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#fff;border:1px solid var(--border2);border-radius:5px;margin-bottom:4px">
+        <span style="flex:1;font-weight:600;color:#1e40af">${_esc(a.oznacenie)}</span>
+        <span style="color:#6b7280;font-family:var(--mono);font-size:11px">${_esc(a.imap_email)} @ ${_esc(a.imap_server)}</span>
+        <span title="Heslo v DB" style="color:#9ca3af">🔒</span>
+        <button class="btn btn-xs" onclick="imapAcctEditOpen('${a.id}', '${uid}')" style="background:#f3f4f6">✎</button>
+        <button class="btn btn-xs btn-red" onclick="imapAcctDelete('${a.id}', '${uid}')">🗑</button>
+      </div>`).join('');
+  }catch(e){
+    el.innerHTML = '<div style="color:#dc2626;font-size:11px">Chyba načítania: '+e.message+'</div>';
+  }
+}
+
+function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
 function renderUserTable(){
   const tbody=document.getElementById('user-tbody');
   // Datalist pre technik_meno autocomplete (existujúci technici z viacerých zdrojov)
@@ -4704,6 +4740,14 @@ function renderUserTable(){
             <input value="${u.imap_email||''}" onchange="updateUser(${idx},'imap_email',this.value)" placeholder="${u.email}"></div>
           <div class="field" style="margin:0"><label>Heslo (IMAP)</label>
             <input type="password" value="${u.imap_heslo||''}" onchange="updateUser(${idx},'imap_heslo',this.value)" placeholder="••••••••"></div>
+        </div>
+        <!-- Sekundárne IMAP účty (Kolo B – zastupovanie) -->
+        <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #d1d5db">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:var(--muted)">
+            🔀 <strong>Sekundárne IMAP účty</strong> – pre zastupovanie kolegýň (dispečérka si zapne sama pri potrebe)
+            <button class="btn btn-xs" onclick="imapAcctAddOpen('${u._id}')" style="margin-left:auto;background:#eef2ff;color:#4338ca;border:1px solid #a5b4fc">+ Pridať účet</button>
+          </div>
+          <div id="imap-accts-list-${u._id}" data-user-id="${u._id}" style="font-size:12px"></div>
         </div>
       </td>
     </tr>`:u.rola==='technik'?`
@@ -4769,6 +4813,8 @@ function renderUserTable(){
     <tr><td colspan="6" style="padding:0;height:6px;background:linear-gradient(90deg,transparent,#6366f1 30%,#6366f1 70%,transparent);opacity:0.25"></td></tr>
     <tr><td colspan="6" style="padding:0;height:2px"></td></tr>
   `);
+  // Kolo B: po renderi dopĺň zoznamy sekundárnych IMAP účtov
+  setTimeout(_imapAcctsForAllUsersAfterRender, 0);
 }
 // QR kód pre mobilné testovanie – modal v aplikácii
 function showQR(){
@@ -6043,5 +6089,209 @@ async function checkPageVersion() {
 // mechanizmom (napr. <meta name="app-version"> alebo /version.txt).
 // setTimeout(checkPageVersion, 30_000);
 // setInterval(checkPageVersion, 15 * 60 * 1000);
+
+// ══════════════════════════════════════════════════════════════
+// Kolo B: Sekundárne IMAP účty – Admin UI (pridať/upraviť/mazať)
+// ══════════════════════════════════════════════════════════════
+
+let _imapAcctForm = { mode: 'add', userId: null, acctId: null };
+
+function imapAcctAddOpen(uid){
+  _imapAcctForm = { mode: 'add', userId: uid, acctId: null };
+  document.getElementById('imap-acct-title').textContent = '🔀 Pridať sekundárny IMAP účet';
+  document.getElementById('imap-acct-oznacenie').value = '';
+  document.getElementById('imap-acct-server').value = 'posta.suptel.cz';
+  document.getElementById('imap-acct-email').value = '';
+  document.getElementById('imap-acct-heslo').value = '';
+  document.getElementById('imap-acct-heslo-hint').textContent = '';
+  document.getElementById('imap-acct-form-overlay').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('imap-acct-oznacenie').focus(), 50);
+}
+
+async function imapAcctEditOpen(acctId, uid){
+  try{
+    const accts = await api('GET', `/api/users/${uid}/imap_accounts`);
+    const a = (accts||[]).find(x => x.id === acctId);
+    if(!a){ toast('⚠ Účet nenájdený'); return; }
+    _imapAcctForm = { mode: 'edit', userId: uid, acctId: acctId };
+    document.getElementById('imap-acct-title').textContent = '🔀 Upraviť sekundárny IMAP účet';
+    document.getElementById('imap-acct-oznacenie').value = a.oznacenie || '';
+    document.getElementById('imap-acct-server').value = a.imap_server || 'posta.suptel.cz';
+    document.getElementById('imap-acct-email').value = a.imap_email || '';
+    document.getElementById('imap-acct-heslo').value = '';  // prázdne = nemeniť
+    document.getElementById('imap-acct-heslo-hint').textContent = '(nechaj prázdne ak nemeníš)';
+    document.getElementById('imap-acct-form-overlay').classList.remove('hidden');
+    setTimeout(()=>document.getElementById('imap-acct-oznacenie').focus(), 50);
+  }catch(e){
+    toast('⚠ Chyba: ' + e.message);
+  }
+}
+
+function imapAcctFormClose(){
+  document.getElementById('imap-acct-form-overlay').classList.add('hidden');
+}
+
+async function imapAcctFormSave(){
+  const oz = document.getElementById('imap-acct-oznacenie').value.trim();
+  const sv = document.getElementById('imap-acct-server').value.trim();
+  const em = document.getElementById('imap-acct-email').value.trim();
+  const hs = document.getElementById('imap-acct-heslo').value;
+  if(!oz || !sv || !em){ toast('⚠ Vyplň označenie, server a email'); return; }
+  if(_imapAcctForm.mode === 'add' && !hs){ toast('⚠ Pri novom účte je heslo povinné'); return; }
+  try{
+    if(_imapAcctForm.mode === 'add'){
+      await api('POST', `/api/users/${_imapAcctForm.userId}/imap_accounts`, {
+        oznacenie: oz, imap_server: sv, imap_email: em, imap_heslo: hs
+      });
+      toast('✓ Sekundárny účet pridaný');
+    } else {
+      const payload = { oznacenie: oz, imap_server: sv, imap_email: em };
+      if(hs) payload.imap_heslo = hs;
+      await api('PATCH', `/api/imap_accounts/${_imapAcctForm.acctId}`, payload);
+      toast('✓ Účet upravený');
+    }
+    imapAcctFormClose();
+    renderImapAccts(_imapAcctForm.userId);
+  }catch(e){
+    toast('⚠ Chyba: ' + e.message);
+  }
+}
+
+async function imapAcctDelete(acctId, uid){
+  if(!confirm('Naozaj zmazať tento sekundárny IMAP účet? Ak ho niekto momentálne zastupuje, prestane dostávať jej maily.')) return;
+  try{
+    await api('DELETE', `/api/imap_accounts/${acctId}`);
+    toast('✓ Účet zmazaný');
+    renderImapAccts(uid);
+  }catch(e){
+    toast('⚠ Chyba: ' + e.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Kolo B: Zastupujem – Dispečérka UI (zaškrtnúť/odškrtnúť)
+// ══════════════════════════════════════════════════════════════
+
+function zastupRefreshBadge(){
+  const btn = document.getElementById('btn-zastupujem');
+  const lbl = document.getElementById('zastup-label');
+  const ico = document.getElementById('zastup-icon');
+  if(!btn||!lbl||!ico||!currentUser) return;
+  const accts = currentUser.imap_accounts || [];
+  if(accts.length === 0){
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  const active = accts.filter(a => a.aktivny_pre_uzivatela).length;
+  if(active > 0){
+    btn.style.background = '#dbeafe';
+    btn.style.border = '1px solid #3b82f6';
+    btn.style.color = '#1e40af';
+    btn.style.fontWeight = '600';
+    ico.textContent = '⚠';
+    lbl.textContent = 'Zastupujem: ' + active;
+  } else {
+    btn.style.background = '#f3f4f6';
+    btn.style.border = '1px solid var(--border2)';
+    btn.style.color = 'var(--text)';
+    btn.style.fontWeight = '400';
+    ico.textContent = '🔀';
+    lbl.textContent = 'Zastupujem';
+  }
+}
+
+async function zastupOpen(){
+  if(!currentUser){ toast('⚠ Nie ste prihlásený'); return; }
+  try{
+    const accts = await api('GET', '/api/me/imap_accounts');
+    currentUser.imap_accounts = Array.isArray(accts) ? accts : [];
+  }catch(e){ /* použijeme lokálnu verziu */ }
+  const list = document.getElementById('zastup-list');
+  const accts = currentUser.imap_accounts || [];
+  if(accts.length === 0){
+    list.innerHTML = '<div style="color:#9ca3af;font-style:italic;padding:8px 0">Admin ti zatiaľ nepridal žiadne sekundárne účty na zastupovanie.</div>';
+  } else {
+    list.innerHTML = accts.map(a => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;margin-bottom:6px;cursor:pointer;background:${a.aktivny_pre_uzivatela?'#dbeafe':'#fff'}">
+        <input type="checkbox" ${a.aktivny_pre_uzivatela?'checked':''} onchange="zastupToggle('${a.id}', this.checked)">
+        <div style="flex:1">
+          <div style="font-weight:600;color:${a.aktivny_pre_uzivatela?'#1e40af':'#111'}">${_esc(a.oznacenie)}</div>
+          <div style="font-size:11px;color:#6b7280;font-family:var(--mono)">${_esc(a.imap_email)}</div>
+        </div>
+      </label>`).join('');
+  }
+  document.getElementById('zastup-overlay').classList.remove('hidden');
+}
+
+function zastupClose(){
+  document.getElementById('zastup-overlay').classList.add('hidden');
+  zastupRefreshBadge();
+}
+
+async function zastupToggle(acctId, checked){
+  try{
+    await api('PATCH', `/api/me/imap_accounts/${acctId}`, { aktivny_pre_uzivatela: !!checked });
+    const accts = currentUser.imap_accounts || [];
+    const a = accts.find(x => x.id === acctId);
+    if(a) a.aktivny_pre_uzivatela = !!checked;
+    zastupRefreshBadge();
+    zastupOpen();  // re-render zoznamu (farby)
+  }catch(e){
+    toast('⚠ Chyba: ' + e.message);
+  }
+}
+
 </script>
+
+<!-- Kolo B: Modálka Pridať/upraviť sekundárny IMAP účet (admin) -->
+<div id="imap-acct-form-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)imapAcctFormClose()">
+  <div style="background:#fff;border-radius:10px;padding:20px 24px;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:var(--font)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 id="imap-acct-title" style="margin:0;font-size:16px;font-weight:700">🔀 Sekundárny IMAP účet</h3>
+      <button onclick="imapAcctFormClose()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1">×</button>
+    </div>
+    <div style="font-size:12px;color:#555;line-height:1.5;margin-bottom:14px">
+      Prihlasovacie údaje kolegyne, ktorú môže táto dispečérka zastupovať. Dispečérka si sama zapne/vypne cez tlačidlo „Zastupujem".
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Označenie (pre orientáciu admina)</label>
+      <input id="imap-acct-oznacenie" type="text" placeholder="napr. Senica – Anna Nováková" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">IMAP Server</label>
+      <input id="imap-acct-server" type="text" placeholder="posta.suptel.cz" value="posta.suptel.cz" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;font-family:var(--mono)">
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Email (IMAP login)</label>
+      <input id="imap-acct-email" type="text" placeholder="kolegyna@suptel.sk" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;font-family:var(--mono)">
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Heslo (IMAP) <span id="imap-acct-heslo-hint" style="font-weight:400;color:#9ca3af"></span></label>
+      <input id="imap-acct-heslo" type="password" placeholder="••••••••" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #eee;padding-top:12px">
+      <button onclick="imapAcctFormClose()" style="background:#f3f4f6;color:#333;border:1px solid var(--border2);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px">Zrušiť</button>
+      <button onclick="imapAcctFormSave()" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Uložiť</button>
+    </div>
+  </div>
+</div>
+
+<!-- Kolo B: Modálka Zastupujem (dispečérka – zapnúť/vypnúť sekundárne účty) -->
+<div id="zastup-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)zastupClose()">
+  <div style="background:#fff;border-radius:10px;padding:20px 24px;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:var(--font)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin:0;font-size:16px;font-weight:700">🔀 Zastupujem</h3>
+      <button onclick="zastupClose()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1">×</button>
+    </div>
+    <div style="font-size:12px;color:#555;line-height:1.5;margin-bottom:12px">
+      Zaškrtni koho zastupuješ. Pri „↻ Načítať" ti systém začne prijímať aj maily z jej mailboxu. Odškrtnutím zastupovanie ukončíš.
+    </div>
+    <div id="zastup-list" style="margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #eee;padding-top:12px">
+      <button onclick="zastupClose()" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Hotovo</button>
+    </div>
+  </div>
+</div>
+
 </body></html>
