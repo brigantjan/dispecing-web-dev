@@ -263,6 +263,10 @@ body[data-role="vedenie"] #tb0,
 body[data-role="vedenie"] #tb5,
 body[data-role="vedenie"] #snav0,
 body[data-role="vedenie"] #snav5 { display:none!important }
+body[data-role="technik"] #snav7,
+body[data-role="operátor"] #snav7,
+body[data-role="dispečér"] #snav7,
+body[data-role="dispecer"] #snav7 { display:none!important }
 /* Mobile dropdown – rozbalené <option> musia mať tmavý text na bielom pozadí.
    Inak sa color:#fff zo selectu prenesie aj do options a v rozbalenom popupe
    (ktoré je biele) sú mená neviditeľné kým nie sú highlighted. */
@@ -387,6 +391,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="sb-nav-item" id="snav4" onclick="switchTab(4)"><span class="icon">⏳</span>Nenaplánované</div>
     <div class="sb-nav-item" id="snav5" onclick="switchTab(5)"><span class="icon">📱</span>Mobil (technik)</div>
     <div class="sb-nav-item" id="snav6" onclick="switchTab(6)"><span class="icon">⚙️</span>Správa používateľov</div>
+    <div class="sb-nav-item" id="snav7" onclick="switchTab(7)"><span class="icon">🤖</span>AI Analytics</div>
   </div>
   <div style="padding:4px 10px 4px;border-top:1px solid var(--border)">
     <div class="dash-title">Dashboard</div>
@@ -432,6 +437,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="tab-btn" id="tb4" onclick="switchTab(4)">⏳ Nenaplánované</div>
     <div class="tab-btn" id="tb5" onclick="switchTab(5)">📱 Mobil (technik)</div>
     <div class="tab-btn" id="tb6" onclick="switchTab(6)">⚙️ Správa používateľov</div>
+    <div class="tab-btn" id="tb7" onclick="switchTab(7)">🤖 AI Analytics</div>
   </div>
   <!-- CONTENT -->
   <div class="tab-content">
@@ -857,6 +863,95 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       </div>
     </div>
   </div>
+
+  <!-- ══════ page7: AI Analytics (Kolo C) ══════ -->
+  <div class="tab-page" id="page7" style="flex-direction:column;overflow:auto;padding:20px 24px;background:var(--bg)">
+    <h2 style="font-size:16px;font-weight:700;color:var(--accent);margin:0 0 12px 0">🤖 AI Analytics – vyhodnotenie návrhov agenta</h2>
+
+    <!-- Filter panel -->
+    <div style="background:#fff;border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Od</label>
+          <input type="date" id="ail-od" style="padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Do</label>
+          <input type="date" id="ail-do" style="padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Stredisko</label>
+          <select id="ail-stredisko" style="padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:13px">
+            <option value="">Všetky</option>
+            <option value="zilina">Žilina</option>
+            <option value="bratislava">Bratislava</option>
+            <option value="trencin">Trenčín</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Event</label>
+          <select id="ail-event" style="padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:13px">
+            <option value="">Všetky</option>
+            <option value="create">Iba create</option>
+            <option value="edit">Iba edit</option>
+          </select>
+        </div>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;padding-bottom:5px">
+          <input type="checkbox" id="ail-iba-zmeny">
+          <span>Iba zmeny</span>
+        </label>
+        <button class="btn btn-accent btn-xs" onclick="aiLogRefresh()" style="padding:6px 12px">🔄 Načítať</button>
+        <button class="btn btn-xs" onclick="aiLogExportCsv()" style="padding:6px 12px;background:#f3f4f6;border:1px solid var(--border2)">📥 Export CSV</button>
+        <span id="ail-status" style="margin-left:auto;font-size:11px;color:var(--muted)"></span>
+      </div>
+    </div>
+
+    <!-- KPI karty -->
+    <div id="ail-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px"></div>
+
+    <!-- Dva stĺpce: top preradenia + histogram -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--border2);border-radius:8px;padding:12px 14px">
+        <h3 style="font-size:13px;font-weight:700;margin:0 0 8px 0;color:#374151">Top 10 preradení (AI navrhol → dispečérka volila)</h3>
+        <div id="ail-top" style="font-size:12px"></div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border2);border-radius:8px;padding:12px 14px">
+        <h3 style="font-size:13px;font-weight:700;margin:0 0 8px 0;color:#374151">Histogram posunu plánu (dispečérka vs. AI)</h3>
+        <div id="ail-hist" style="font-size:12px"></div>
+      </div>
+    </div>
+
+    <!-- Raw záznamy tabuľka -->
+    <div style="background:#fff;border:1px solid var(--border2);border-radius:8px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <h3 style="font-size:13px;font-weight:700;margin:0;color:#374151">Raw záznamy</h3>
+        <span id="ail-pag" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+        <button class="btn btn-xs" onclick="aiLogPage(-1)" style="padding:3px 8px">◀ Predošlé</button>
+        <button class="btn btn-xs" onclick="aiLogPage(1)" style="padding:3px 8px">Nasledujúce ▶</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:11px;border-collapse:collapse" id="ail-table">
+          <thead>
+            <tr style="background:#f9fafb;border-bottom:1px solid var(--border2)">
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Dátum</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Event</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Stredisko</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">ID obj</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">AI technik</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Zvolený</th>
+              <th style="text-align:right;padding:5px 6px;font-weight:600">Posun</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Dôvod</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Region</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Typ/Balík</th>
+              <th style="text-align:left;padding:5px 6px;font-weight:600">User</th>
+            </tr>
+          </thead>
+          <tbody id="ail-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main -->
 </div><!-- /app -->
 
@@ -1972,10 +2067,11 @@ function switchTab(idx){
   // Ochrana podľa role
   const r=currentUser?.rola||'';
   if(idx===6 && r!=='admin' && r!=='vedenie') return;  // Správa použ. = admin + vedenie
+  if(idx===7 && r!=='admin' && r!=='vedenie') return;  // AI Analytics = admin + vedenie
   if(r==='technik' && idx!==5) return;          // Technik = len mobil
   if(r==='operátor' && idx!==1) return;         // Operátor = len objednávky
   if(r==='vedenie' && (idx===0||idx===5)) return; // Vedenie = bez Novej a Mobilu
-  for(let i=0;i<=6;i++){
+  for(let i=0;i<=7;i++){
     document.getElementById('tb'+i)?.classList.toggle('active',i===idx);
     document.getElementById('page'+i)?.classList.toggle('active',i===idx);
     document.getElementById('snav'+i)?.classList.toggle('active',i===idx);
@@ -2004,6 +2100,7 @@ function switchTab(idx){
   if(idx===4)showNeplan();
   if(idx===5)renderMobil();
   if(idx===6)renderUserTable();
+  if(idx===7)renderAiAnalytics();
 }
 function fillMobTechnik(){
   const sel=document.getElementById('mob-tech');
@@ -6294,4 +6391,258 @@ async function zastupToggle(acctId, checked){
   </div>
 </div>
 
+<script>
+// ══════════════════════════════════════════════════════════════
+// Kolo C: AI Analytics – vyhodnotenie AI logu
+// ══════════════════════════════════════════════════════════════
+
+let _ailData = { rows: [], stats: null, page: 0, pageSize: 50 };
+
+function renderAiAnalytics(){
+  // Nastavenie default filter hodnôt pri prvom otvorení
+  const odEl = document.getElementById('ail-od');
+  const doEl = document.getElementById('ail-do');
+  if(!odEl.value){
+    const today = new Date();
+    const past = new Date(today.getTime() - 30*86400000);
+    odEl.value = past.toISOString().slice(0,10);
+    doEl.value = today.toISOString().slice(0,10);
+  }
+  // Ak už boli dáta načítané, iba prekresli (aby sa nezopakovalo API volanie)
+  if(_ailData.rows.length > 0){
+    _aiLogRenderAll();
+  } else {
+    aiLogRefresh();
+  }
+}
+
+async function aiLogRefresh(){
+  const od = document.getElementById('ail-od').value;
+  const doV = document.getElementById('ail-do').value;
+  const stredisko = document.getElementById('ail-stredisko').value;
+  const event = document.getElementById('ail-event').value;
+  const ibaZmeny = document.getElementById('ail-iba-zmeny').checked ? 1 : 0;
+  if(!od || !doV){ toast('⚠ Vyplň dátumy Od a Do'); return; }
+
+  const statusEl = document.getElementById('ail-status');
+  statusEl.textContent = 'Načítavam…';
+  _ailData.rows = [];
+  _ailData.page = 0;
+
+  // Paginovaný fetch – limit backend je 500, iterujeme kým prídu prázdne
+  try{
+    let offset = 0;
+    const LIMIT = 500;
+    const MAX_LOOPS = 20;  // safety – max 10 000 záznamov
+    for(let loop = 0; loop < MAX_LOOPS; loop++){
+      const qs = new URLSearchParams({
+        od, do: doV, limit: LIMIT, offset
+      });
+      if(stredisko) qs.set('stredisko', stredisko);
+      if(event) qs.set('event', event);
+      if(ibaZmeny) qs.set('iba_zmeny', '1');
+      const batch = await api('GET', '/api/ai_log?' + qs.toString());
+      if(!Array.isArray(batch) || batch.length === 0) break;
+      _ailData.rows = _ailData.rows.concat(batch);
+      statusEl.textContent = 'Načítavam… ' + _ailData.rows.length + ' záznamov';
+      if(batch.length < LIMIT) break;
+      offset += LIMIT;
+    }
+    _ailData.stats = _aiLogComputeStats(_ailData.rows);
+    statusEl.textContent = '✓ ' + _ailData.rows.length + ' záznamov';
+    _aiLogRenderAll();
+  }catch(e){
+    statusEl.textContent = '⚠ Chyba: ' + e.message;
+    toast('⚠ Chyba načítania AI logu: ' + e.message);
+  }
+}
+
+function _aiLogComputeStats(rows){
+  const total = rows.length;
+  if(total === 0){
+    return { total: 0, zmena_technika_pct: 0, zmena_planu_pct: 0, priemer_posun: 0,
+             top: [], hist: {} };
+  }
+  let zmT = 0, zmP = 0;
+  const pairs = {};
+  const hist = {};
+  let sumPosun = 0, cntPosun = 0;
+  for(const r of rows){
+    if(r.zmena_technika === 1){
+      zmT++;
+      const a = r.ai_technik || '';
+      const z = r.zvol_technik || '';
+      if(a && z){
+        const key = a + ' → ' + z;
+        pairs[key] = (pairs[key] || 0) + 1;
+      }
+    }
+    if(r.zmena_planu === 1){
+      zmP++;
+      const d = r.posun_dni;
+      if(d !== null && d !== undefined){
+        sumPosun += d;
+        cntPosun++;
+        let k;
+        if(d <= -5) k = '≤-5';
+        else if(d >= 5) k = '≥+5';
+        else k = (d >= 0 ? '+' : '') + d;
+        hist[k] = (hist[k] || 0) + 1;
+      }
+    }
+  }
+  const topArr = Object.entries(pairs).sort((a,b) => b[1] - a[1]).slice(0, 10);
+  return {
+    total,
+    zmena_technika_pct: Math.round(1000 * zmT / total) / 10,
+    zmena_planu_pct: Math.round(1000 * zmP / total) / 10,
+    priemer_posun: cntPosun ? Math.round(100 * sumPosun / cntPosun) / 100 : 0,
+    top: topArr.map(([k, v]) => ({ par: k, pocet: v, pct: Math.round(1000 * v / total) / 10 })),
+    hist
+  };
+}
+
+function _aiLogRenderAll(){
+  _aiLogRenderKpi();
+  _aiLogRenderTop();
+  _aiLogRenderHist();
+  _aiLogRenderTable();
+}
+
+function _aiLogRenderKpi(){
+  const s = _ailData.stats;
+  if(!s){ document.getElementById('ail-kpi').innerHTML = ''; return; }
+  // Farba KPI podľa hodnoty (ideál <30% zelená, 30-50 oranžová, >50 červená)
+  const colorPct = (p) => p < 30 ? '#059669' : (p < 50 ? '#d97706' : '#dc2626');
+  const bgPct    = (p) => p < 30 ? '#ecfdf5' : (p < 50 ? '#fffbeb' : '#fef2f2');
+  const cards = [
+    { label: 'Total záznamov', val: s.total, color: '#111', bg: '#f9fafb' },
+    { label: 'Zmena technika', val: s.zmena_technika_pct + '%', color: colorPct(s.zmena_technika_pct), bg: bgPct(s.zmena_technika_pct) },
+    { label: 'Zmena plánu', val: s.zmena_planu_pct + '%', color: colorPct(s.zmena_planu_pct), bg: bgPct(s.zmena_planu_pct) },
+    { label: 'Priemer posunu', val: (s.priemer_posun >= 0 ? '+' : '') + s.priemer_posun + ' dní', color: '#111', bg: '#f9fafb' }
+  ];
+  document.getElementById('ail-kpi').innerHTML = cards.map(k => `
+    <div style="background:${k.bg};border:1px solid var(--border2);border-radius:8px;padding:12px 14px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px">${k.label}</div>
+      <div style="font-size:22px;font-weight:700;color:${k.color};margin-top:4px">${k.val}</div>
+    </div>`).join('');
+}
+
+function _aiLogRenderTop(){
+  const s = _ailData.stats;
+  const el = document.getElementById('ail-top');
+  if(!s || s.top.length === 0){ el.innerHTML = '<div style="color:#9ca3af;font-style:italic;padding:8px 0">Žiadne preradenia</div>'; return; }
+  const maxCount = Math.max(...s.top.map(t => t.pocet));
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      ${s.top.map((t, i) => {
+        const w = Math.round(100 * t.pocet / maxCount);
+        return `<tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:4px 6px;color:#6b7280;width:20px">${i+1}.</td>
+          <td style="padding:4px 6px;font-family:var(--mono)">${_esc(t.par)}</td>
+          <td style="padding:4px 6px;text-align:right;font-weight:600">${t.pocet}</td>
+          <td style="padding:4px 6px;text-align:right;color:#6b7280;width:50px">${t.pct}%</td>
+          <td style="padding:4px 6px;width:120px">
+            <div style="background:#dbeafe;height:8px;border-radius:2px;width:${w}%"></div>
+          </td>
+        </tr>`;
+      }).join('')}
+    </table>`;
+}
+
+function _aiLogRenderHist(){
+  const s = _ailData.stats;
+  const el = document.getElementById('ail-hist');
+  if(!s || Object.keys(s.hist).length === 0){ el.innerHTML = '<div style="color:#9ca3af;font-style:italic;padding:8px 0">Žiadne posuny plánu</div>'; return; }
+  // Zoradiť buckety v logickom poradí
+  const order = ['≤-5','-4','-3','-2','-1','+1','+2','+3','+4','≥+5'];
+  const maxCount = Math.max(...Object.values(s.hist));
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      ${order.map(k => {
+        const v = s.hist[k] || 0;
+        const w = maxCount ? Math.round(100 * v / maxCount) : 0;
+        const color = k.startsWith('≤') || k.startsWith('-') ? '#059669' : '#dc2626';
+        return `<tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:4px 6px;font-family:var(--mono);width:40px;text-align:right;font-weight:600">${k}</td>
+          <td style="padding:4px 6px">
+            <div style="background:${color};opacity:.6;height:14px;border-radius:2px;width:${w}%;min-width:${v>0?'2px':'0'}"></div>
+          </td>
+          <td style="padding:4px 6px;text-align:right;width:40px;font-weight:600">${v}</td>
+        </tr>`;
+      }).join('')}
+      <tr><td colspan="3" style="padding:8px 6px 0;font-size:10px;color:var(--muted);border-top:1px solid #f3f4f6">
+        <span style="color:#059669">←</span> dispečérka plánuje SKÔR ako AI &nbsp;•&nbsp; <span style="color:#dc2626">→</span> plánuje NESKÔR ako AI
+      </td></tr>
+    </table>`;
+}
+
+function _aiLogRenderTable(){
+  const rows = _ailData.rows;
+  const el = document.getElementById('ail-tbody');
+  const pagEl = document.getElementById('ail-pag');
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / _ailData.pageSize));
+  if(_ailData.page >= pages) _ailData.page = pages - 1;
+  if(_ailData.page < 0) _ailData.page = 0;
+  const start = _ailData.page * _ailData.pageSize;
+  const end = Math.min(start + _ailData.pageSize, total);
+  const view = rows.slice(start, end);
+  pagEl.textContent = `${start+1}–${end} z ${total} (strana ${_ailData.page+1}/${pages})`;
+  el.innerHTML = view.map(r => {
+    const posun = r.posun_dni;
+    const posunStr = (posun === null || posun === undefined) ? '—' : (posun >= 0 ? '+' + posun : posun);
+    const posunColor = (posun === null || posun === undefined) ? '#9ca3af' : (posun < 0 ? '#059669' : (posun > 0 ? '#dc2626' : '#6b7280'));
+    const isDiff = (r.ai_technik || '') !== (r.zvol_technik || '');
+    const techBg = isDiff ? 'background:#fef3c7' : '';
+    return `<tr style="border-bottom:1px solid #f3f4f6">
+      <td style="padding:3px 6px;font-family:var(--mono);font-size:10px">${_esc((r.ts||'').slice(0,10))}</td>
+      <td style="padding:3px 6px">${_esc(r.event||'')}</td>
+      <td style="padding:3px 6px">${_esc(r.stredisko||'')}</td>
+      <td style="padding:3px 6px;font-family:var(--mono);font-size:10px">${_esc((r.id_obj||'').slice(0,10))}</td>
+      <td style="padding:3px 6px;${techBg}">${_esc(r.ai_technik||'')}</td>
+      <td style="padding:3px 6px;${techBg}">${_esc(r.zvol_technik||'')}</td>
+      <td style="padding:3px 6px;text-align:right;color:${posunColor};font-weight:600">${posunStr}</td>
+      <td style="padding:3px 6px;font-family:var(--mono);font-size:10px">${_esc(r.ai_dovod||'')}</td>
+      <td style="padding:3px 6px">${_esc(r.region||'')}</td>
+      <td style="padding:3px 6px;font-family:var(--mono);font-size:10px">${_esc((r.typ||'')+'/'+(r.balik||''))}</td>
+      <td style="padding:3px 6px;font-size:10px;color:#6b7280">${_esc((r.user_email||'').split('@')[0])}</td>
+    </tr>`;
+  }).join('');
+}
+
+function aiLogPage(delta){
+  _ailData.page += delta;
+  _aiLogRenderTable();
+}
+
+function aiLogExportCsv(){
+  const rows = _ailData.rows;
+  if(rows.length === 0){ toast('⚠ Žiadne dáta na export'); return; }
+  const od = document.getElementById('ail-od').value;
+  const doV = document.getElementById('ail-do').value;
+  const cols = ['ts','event','stredisko','id_obj','user_email','typ','balik','region','lt','add_txt','termin_z_predaja','ai_technik','ai_plan','ai_dovod','ai_skore','zvol_technik','zvol_plan','zmena_technika','zmena_planu','posun_dni'];
+  const csvRows = [cols.join(';')];
+  for(const r of rows){
+    const line = cols.map(c => {
+      const v = r[c];
+      if(v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g,'""').replace(/;/g,',').replace(/\n/g,' ');
+      return s.includes(',') || s.includes('"') ? '"'+s+'"' : s;
+    }).join(';');
+    csvRows.push(line);
+  }
+  const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ai_log_${od}_${doV}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('✓ Export ' + rows.length + ' záznamov');
+}
+
+</script>
 </body></html>
