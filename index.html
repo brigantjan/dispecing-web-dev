@@ -263,10 +263,12 @@ body[data-role="vedenie"] #tb0,
 body[data-role="vedenie"] #tb5,
 body[data-role="vedenie"] #snav0,
 body[data-role="vedenie"] #snav5 { display:none!important }
-body[data-role="technik"] #snav7,
-body[data-role="operátor"] #snav7,
-body[data-role="dispečér"] #snav7,
-body[data-role="dispecer"] #snav7 { display:none!important }
+/* Kolo C1.1: AI Analytics tab (snav7 + tb7) skrytý pre všetky role okrem admin/vedenie */
+body[data-role="technik"] #snav7, body[data-role="technik"] #tb7,
+body[data-role="operátor"] #snav7, body[data-role="operátor"] #tb7,
+body[data-role="operator"] #snav7, body[data-role="operator"] #tb7,
+body[data-role="dispečér"] #snav7, body[data-role="dispečér"] #tb7,
+body[data-role="dispecer"] #snav7, body[data-role="dispecer"] #tb7 { display:none!important }
 /* Mobile dropdown – rozbalené <option> musia mať tmavý text na bielom pozadí.
    Inak sa color:#fff zo selectu prenesie aj do options a v rozbalenom popupe
    (ktoré je biele) sú mená neviditeľné kým nie sú highlighted. */
