@@ -263,12 +263,12 @@ body[data-role="vedenie"] #tb0,
 body[data-role="vedenie"] #tb5,
 body[data-role="vedenie"] #snav0,
 body[data-role="vedenie"] #snav5 { display:none!important }
-/* Kolo C1.1: AI Analytics tab (snav7 + tb7) skrytý pre všetky role okrem admin/vedenie */
-body[data-role="technik"] #snav7, body[data-role="technik"] #tb7,
-body[data-role="operátor"] #snav7, body[data-role="operátor"] #tb7,
-body[data-role="operator"] #snav7, body[data-role="operator"] #tb7,
-body[data-role="dispečér"] #snav7, body[data-role="dispečér"] #tb7,
-body[data-role="dispecer"] #snav7, body[data-role="dispecer"] #tb7 { display:none!important }
+/* Kolo C1.2: AI Analytics tab (snav7 + tb7) – whitelist prístup */
+/* Defaultne skryté pre všetkých; zobrazí sa iba pre admin a vedenie. */
+/* Funguje spolu so zmenou JS setAttribute (r. ~1934), kde data-role = user.rola. */
+#snav7, #tb7 { display:none }
+body[data-role="admin"] #snav7, body[data-role="admin"] #tb7,
+body[data-role="vedenie"] #snav7, body[data-role="vedenie"] #tb7 { display:revert !important }
 /* Mobile dropdown – rozbalené <option> musia mať tmavý text na bielom pozadí.
    Inak sa color:#fff zo selectu prenesie aj do options a v rozbalenom popupe
    (ktoré je biele) sú mená neviditeľné kým nie sú highlighted. */
@@ -1931,7 +1931,7 @@ function doLogin(){
     document.getElementById('sb-sub').textContent = `SUPTEL ${stLabel.toUpperCase()}`;
     document.getElementById('topbar-file').textContent = `SUPTEL ${stLabel.toUpperCase()}`;
     // Nastav rolu na body PRED zobrazením app – CSS okamžite skryje správne prvky
-    document.body.setAttribute('data-role', user.rola==='technik'?'technik':user.rola==='vedenie'?'vedenie':'');
+    document.body.setAttribute('data-role', user.rola || '');
 
     document.getElementById('login-screen').style.display='none';
     // Zobraz loading overlay (skryje prázdnu app počas načítavania dát)
