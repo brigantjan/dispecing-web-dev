@@ -1153,8 +1153,8 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <button class="btn btn-accent btn-big" onclick="saveEdit()">💾 Uložiť zmeny</button>
     <button class="btn btn-outline" onclick="closeEdit()">Zrušiť</button>
     <div class="ml-a" style="display:flex;gap:7px">
-      <button class="btn" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-t)" onclick="uzavriDnes()">✅ Uzavri dnes</button>
-      <button class="btn" style="background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-t)" onclick="stornujDnes()">⚠ Vystornuj dnes</button>
+      <button id="e-btn-uzavri" class="btn" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-t)" onclick="uzavriDnes()">✅ Uzavri dnes</button>
+      <button id="e-btn-storno" class="btn" style="background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-t)" onclick="stornujDnes()">⚠ Vystornuj dnes</button>
     </div>
   </div>
 </div>
@@ -4261,6 +4261,32 @@ window.addEventListener('beforeunload', () => {
 // EDIT DIALOG
 // ════════════════════════════════════════════════════════════
 let editCurrentId=null,editOrigPlan=null,editOrigRez=0,editOrigObj=null,editOrigTechnik=null;
+
+// C1.3: Vypína tlačidlá "Uzavri dnes" / "Vystornuj dnes" pri už uzavretej/stornovanej objednávke.
+// Rieši častý omyl: dispečérka pri editácii uzavretej objednávky omylom klikne "Uzavri dnes"
+// namiesto "Uložiť zmeny", čím prepíše dátum uzavretia na dnes (nesprávne).
+// Ak treba naozaj prepísať dátum, urobí sa cez pole "Dátum realizácie" + Uložiť zmeny.
+function _updateEditActionButtons(farba){
+  const btnU = document.getElementById("e-btn-uzavri");
+  const btnS = document.getElementById("e-btn-storno");
+  if(!btnU || !btnS) return;  // defenzívne: nič nerobiť ak tlačidlá chýbajú
+  // Vždy reset (predchádzajúca objednávka mohla byť iná)
+  btnU.disabled = false; btnU.style.opacity = ""; btnU.style.cursor = ""; btnU.removeAttribute("title");
+  btnS.disabled = false; btnS.style.opacity = ""; btnS.style.cursor = ""; btnS.removeAttribute("title");
+  // Podľa farby vypnúť príslušné tlačidlo
+  if(farba === "zelena"){
+    btnU.disabled = true;
+    btnU.style.opacity = "0.4";
+    btnU.style.cursor = "not-allowed";
+    btnU.setAttribute("title", "Objednávka je už uzavretá. Ak chceš zmeniť dátum uzavretia, uprav pole \"Dátum realizácie\" a klikni Uložiť zmeny.");
+  } else if(farba === "zlta"){
+    btnS.disabled = true;
+    btnS.style.opacity = "0.4";
+    btnS.style.cursor = "not-allowed";
+    btnS.setAttribute("title", "Objednávka je už stornovaná. Ak chceš zmeniť dátum storna, uprav pole \"Dátum realizácie\" a klikni Uložiť zmeny.");
+  }
+}
+
 function otvorEditModal(id_obj){
   const o=MOCK_OBJ.find(x=>x.id_obj===id_obj);if(!o)return;
   const rola=currentUser?.rola||'dispečér';
@@ -4301,6 +4327,8 @@ function otvorEditModal(id_obj){
   if(ao){if(editStav==='hotova')ao.classList.add('active-h');else if(editStav==='storno')ao.classList.add('active-s');else if(editStav==='prerezerv')ao.classList.add('active-p');else ao.classList.add('active-pl');}
   document.getElementById('edit-title').textContent=`Úprava – ${id_obj}`;
   document.getElementById('edit-overlay').classList.add('open');
+  // C1.3: Vypnúť "Uzavri dnes" / "Vystornuj dnes" ak je objednávka už v tom stave
+  _updateEditActionButtons(o.farba);
   // Pokus o získanie locku – asynchrónne, dialóg je už otvorený
   // Pri konflikte sa banner zobrazí a polia sa zablokujú (read-only mode B)
   LockManager.acquire(id_obj);
