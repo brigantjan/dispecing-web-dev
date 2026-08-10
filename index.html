@@ -237,6 +237,8 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 /* ─── KAPACITA – víkend/sviatok stĺpec ──────────────────── */
 .cap-tbl th.wknd{background:#fff0f0;color:#c62828}
 .cap-tbl td.wknd-col{background:rgba(239,68,68,.08)!important}
+/* ─── KAPACITA – dovolenka technika (bunka "D") ───────────── */
+.cap-tbl td.dovolenka{background:#ffebee!important;color:#b71c1c!important;font-weight:800!important}
 /* ─── SPRÁVA POUŽÍVATEĽOV ───────────────────────────────── */
 .user-tbl{width:100%;border-collapse:collapse;font-size:13px}
 .user-tbl th{background:#f0f4fa;color:var(--text2);padding:8px 12px;text-align:left;border-bottom:2px solid var(--border2);font-weight:700;white-space:nowrap}
@@ -269,6 +271,11 @@ body[data-role="vedenie"] #snav5 { display:none!important }
 #snav7, #tb7 { display:none }
 body[data-role="admin"] #snav7, body[data-role="admin"] #tb7,
 body[data-role="vedenie"] #snav7, body[data-role="vedenie"] #tb7 { display:revert !important }
+/* Dovolenky tab (snav8 + tb8) – whitelist prístup: admin + dispečér (NIE vedenie) */
+#snav8, #tb8 { display:none }
+body[data-role="admin"] #snav8, body[data-role="admin"] #tb8,
+body[data-role="dispečér"] #snav8, body[data-role="dispečér"] #tb8,
+body[data-role="dispecer"] #snav8, body[data-role="dispecer"] #tb8 { display:revert !important }
 /* Mobile dropdown – rozbalené <option> musia mať tmavý text na bielom pozadí.
    Inak sa color:#fff zo selectu prenesie aj do options a v rozbalenom popupe
    (ktoré je biele) sú mená neviditeľné kým nie sú highlighted. */
@@ -394,6 +401,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="sb-nav-item" id="snav5" onclick="switchTab(5)"><span class="icon">📱</span>Mobil (technik)</div>
     <div class="sb-nav-item" id="snav6" onclick="switchTab(6)"><span class="icon">⚙️</span>Správa používateľov</div>
     <div class="sb-nav-item" id="snav7" onclick="switchTab(7)"><span class="icon">🤖</span>AI Analytics</div>
+    <div class="sb-nav-item" id="snav8" onclick="switchTab(8)"><span class="icon">🏖️</span>Dovolenky</div>
   </div>
   <div style="padding:4px 10px 4px;border-top:1px solid var(--border)">
     <div class="dash-title">Dashboard</div>
@@ -440,6 +448,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="tab-btn" id="tb5" onclick="switchTab(5)">📱 Mobil (technik)</div>
     <div class="tab-btn" id="tb6" onclick="switchTab(6)">⚙️ Správa používateľov</div>
     <div class="tab-btn" id="tb7" onclick="switchTab(7)">🤖 AI Analytics</div>
+    <div class="tab-btn" id="tb8" onclick="switchTab(8)">🏖️ Dovolenky</div>
   </div>
   <!-- CONTENT -->
   <div class="tab-content">
@@ -950,6 +959,32 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           </thead>
           <tbody id="ail-tbody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB 8: DOVOLENKY TECHNIKOV (admin + dispečér) ═══ -->
+  <div class="tab-page" id="page8" style="flex-direction:column;overflow:auto;padding:20px 24px;background:var(--bg)">
+    <div style="max-width:820px;width:100%">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <h2 style="font-size:16px;font-weight:700;color:var(--accent)">🏖️ Dovolenky technikov</h2>
+        <button class="btn btn-outline btn-xs" onclick="loadDovolenkyTab()">↻ Obnoviť</button>
+        <span style="font-size:11px;color:var(--muted)">Zmeny sa ukladajú okamžite po kliknutí na Uložiť pri danom technikovi.</span>
+      </div>
+      <table class="user-tbl" id="dovolenky-tbl">
+        <thead><tr>
+          <th style="width:32px"></th>
+          <th>Technik</th>
+          <th style="width:150px">Dovolenka od</th>
+          <th style="width:150px">Dovolenka do</th>
+          <th style="width:90px">Akcia</th>
+        </tr></thead>
+        <tbody id="dovolenky-tbody"></tbody>
+      </table>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px">
+        💡 Zaškrtnutím "Na dovolenke" a vyplnením rozsahu dátumov sa technik v tabuľke
+        Kapacita technikov (záložka Nová objednávka) zobrazí ako <b style="color:#b71c1c">D</b>
+        (červenou) na príslušné dni – ale iba ak má v zobrazenom rozsahu aspoň jednu objednávku.
       </div>
     </div>
   </div>
@@ -2070,10 +2105,11 @@ function switchTab(idx){
   const r=currentUser?.rola||'';
   if(idx===6 && r!=='admin' && r!=='vedenie') return;  // Správa použ. = admin + vedenie
   if(idx===7 && r!=='admin' && r!=='vedenie') return;  // AI Analytics = admin + vedenie
+  if(idx===8 && r!=='admin' && r!=='dispečér') return; // Dovolenky = admin + dispečér (nie vedenie)
   if(r==='technik' && idx!==5) return;          // Technik = len mobil
   if(r==='operátor' && idx!==1) return;         // Operátor = len objednávky
   if(r==='vedenie' && (idx===0||idx===5)) return; // Vedenie = bez Novej a Mobilu
-  for(let i=0;i<=7;i++){
+  for(let i=0;i<=8;i++){
     document.getElementById('tb'+i)?.classList.toggle('active',i===idx);
     document.getElementById('page'+i)?.classList.toggle('active',i===idx);
     document.getElementById('snav'+i)?.classList.toggle('active',i===idx);
@@ -2082,6 +2118,7 @@ function switchTab(idx){
   if(activeTab===1 && idx!==1) bulkClear();
   if(activeTab===3 && idx!==3) prChecked.clear(); // odchod z Pre-rezervované → reset výberu
   activeTab=idx;
+  if(idx===8){ loadDovolenkyTab(); }
   if(idx===1){
     // Optimalizácia: re-rendruj tabuľku len ak sa MOCK_OBJ zmenil od posledného render.
     // Pri 3342 obj. by re-render trval ~2s; pri opakovanom prepínaní záložiek to bolo
@@ -3637,6 +3674,14 @@ function isVikendSviatok(iso){
   if(d.getDay()===0||d.getDay()===6)return true;
   return sviatky(d.getFullYear()).has(iso);
 }
+// Vráti true ak je technik na dovolenke k danému dňu (iso = "YYYY-MM-DD").
+// Číta z TECHNICI_DETAIL (dostupné všetkým rolám, aktualizuje sa po uložení v záložke Dovolenky).
+function isTechnikNaDovolenke(technikMeno, iso){
+  const td=TECHNICI_DETAIL[technikMeno];
+  if(!td || !td.na_dovolenke) return false;
+  if(!td.dovolenka_od || !td.dovolenka_do) return false;
+  return iso>=td.dovolenka_od && iso<=td.dovolenka_do;
+}
 // Helper: vráti veľkosť tímu pre daného technika.
 // Primárne z TECHNICI_DETAIL (dostupné pre všetky role – admin/dispečér/operátor).
 // Fallback na DEMO_USERS (len ak je admin), inak default 1.
@@ -3676,16 +3721,19 @@ function renderCapTbl(f,t){
     dates.forEach(d=>{
       const vs=isVikendSviatok(d);
       const a=grid[tc]&&grid[tc][d]?grid[tc][d]:[];const v=a.length;
+      const naDov=isTechnikNaDovolenke(tc,d);
       // Prahy sa násobia tim_velkost (Weiss tim=5 → ≤20 zel, ≤45 oranž, >45 červ)
       const prahZ=4*tim, prahO=9*tim;
-      const cls=(vs?'wknd-col ':'')+( v===0?'c0':v<=prahZ?'c14':v<=prahO?'c59':'c10');
+      const cls=naDov
+        ? (vs?'wknd-col ':'')+'dovolenka'
+        : (vs?'wknd-col ':'')+( v===0?'c0':v<=prahZ?'c14':v<=prahO?'c59':'c10');
       // Tooltip: pri tíme dopočítaj priemer/technik
-      let tip=a.join('\n');
-      if(tim>1 && v>0){
+      let tip=naDov?'Technik je na dovolenke'+(a.length?`\n\n${v} obj. plánovaných na tento deň:\n${a.join('\n')}`:''):a.join('\n');
+      if(!naDov && tim>1 && v>0){
         const priemer=(v/tim).toFixed(1);
         tip=`${v} obj. v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
       }
-      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${v||'—'}</td>`;
+      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?'D':(v||'—')}</td>`;
     });h+=`</tr>`;
   });
   h+=`</tbody></table>`;wrap.innerHTML=h;
@@ -3729,7 +3777,68 @@ function renderPrCapTbl(f,t){
 }
 
 // ════════════════════════════════════════════════════════════
-// TAB 1: OBJEDNÁVKY (komplexná tabuľka)
+// DOVOLENKY TECHNIKOV (admin + dispečér)
+// ════════════════════════════════════════════════════════════
+let DOVOLENKY_DATA = [];
+async function loadDovolenkyTab(){
+  const tbody=document.getElementById('dovolenky-tbody');
+  if(!tbody) return;
+  tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Načítavam...</td></tr>';
+  try{
+    DOVOLENKY_DATA = await api('GET','/api/technici/dovolenky') || [];
+    renderDovolenkyTable();
+  }catch(e){
+    tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:#c62828;padding:14px">Chyba načítania: ${e.message}</td></tr>`;
+  }
+}
+function renderDovolenkyTable(){
+  const tbody=document.getElementById('dovolenky-tbody');
+  if(!tbody) return;
+  if(!DOVOLENKY_DATA.length){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Žiadni aktívni technici.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = DOVOLENKY_DATA.map(t=>{
+    const checked = t.na_dovolenke ? 'checked' : '';
+    const od = t.dovolenka_od || '';
+    const doD = t.dovolenka_do || '';
+    return `<tr data-uid="${t.id}">
+      <td style="text-align:center"><input type="checkbox" id="dv-chk-${t.id}" ${checked} style="width:16px;height:16px;cursor:pointer"></td>
+      <td style="font-weight:600">${t.technik_meno||'–'}</td>
+      <td><input type="date" id="dv-od-${t.id}" value="${od}"></td>
+      <td><input type="date" id="dv-do-${t.id}" value="${doD}"></td>
+      <td><button class="btn btn-primary btn-xs" onclick="saveDovolenka(${t.id})">💾 Uložiť</button></td>
+    </tr>`;
+  }).join('');
+}
+async function saveDovolenka(uid){
+  const chk = document.getElementById(`dv-chk-${uid}`);
+  const odEl = document.getElementById(`dv-od-${uid}`);
+  const doEl = document.getElementById(`dv-do-${uid}`);
+  if(!chk || !odEl || !doEl) return;
+  const na_dovolenke = chk.checked ? 1 : 0;
+  const dovolenka_od = odEl.value || '';
+  const dovolenka_do = doEl.value || '';
+  if(na_dovolenke && dovolenka_od && dovolenka_do && dovolenka_od > dovolenka_do){
+    toast('⚠ Dátum "od" musí byť pred dátumom "do"');
+    return;
+  }
+  try{
+    await api('PATCH', `/api/technici/${uid}/dovolenka`, {na_dovolenke, dovolenka_od, dovolenka_do});
+    // Aktualizuj lokálnu kópiu a TECHNICI_DETAIL (aby sa kapacita hneď prejavila)
+    const rec = DOVOLENKY_DATA.find(t=>t.id===uid);
+    if(rec){ rec.na_dovolenke=na_dovolenke; rec.dovolenka_od=dovolenka_od; rec.dovolenka_do=dovolenka_do; }
+    if(rec && TECHNICI_DETAIL[rec.technik_meno]){
+      TECHNICI_DETAIL[rec.technik_meno].na_dovolenke = na_dovolenke;
+      TECHNICI_DETAIL[rec.technik_meno].dovolenka_od = dovolenka_od;
+      TECHNICI_DETAIL[rec.technik_meno].dovolenka_do = dovolenka_do;
+    }
+    toast('✅ Dovolenka uložená');
+    if(document.getElementById('cap-wrap')) refreshCap();
+  }catch(e){
+    toast('❌ Chyba: '+e.message);
+  }
+}
 // ════════════════════════════════════════════════════════════
 // Excel-like dátumový filter:
 // "15.4.2026" alebo "2026-04-15" → presný deň
