@@ -3700,10 +3700,16 @@ function renderCapTbl(f,t){
   const dates=getDates(f,t);
   const grid={};
   MOCK_OBJ.forEach(o=>{if(!o.plan||o.real||!o.zdroj||o.farba==='zlta')return;if(o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const _bal=o.balik?`[${o.balik}]`:'';const tipItem=o.cas_od?`${o.adresa||''} ${_bal} ${o.cas_od}–${o.cas_do}`.trim():`${o.adresa||''} ${_bal}`.trim();if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
-  // Zobrazujeme LEN technikov ktorí majú aspoň jednu objednávku v zobrazenom rozsahu.
-  // Pôvodne sa tu pridávali aj prázdne riadky pre VŠETKÝCH z TECHNICI – to spôsobovalo
-  // zobrazenie testovacích/neexistujúcich technikov ako "Nový používateľ" s prázdnym riadkom.
-  const techs=Object.keys(grid).sort();
+  // Zobrazujeme technikov ktorí majú aspoň jednu objednávku v zobrazenom rozsahu,
+  // PLUS technikov na dovolenke s OHRANIČENÝM koncom (dovolenka_do vyplnený) –
+  // aj keď nemajú žiadnu objednávku – aby dispečérka vždy videla, s kým môže rátať.
+  // Technici na dovolenke BEZ ohraničeného konca (dovolenka_do prázdne) sa tu nezobrazujú.
+  const techsWithOrders = Object.keys(grid);
+  const techsOnVacation = Object.keys(TECHNICI_DETAIL).filter(name=>{
+    const td=TECHNICI_DETAIL[name];
+    return td && td.na_dovolenke && td.dovolenka_do;
+  });
+  const techs=Array.from(new Set([...techsWithOrders, ...techsOnVacation])).sort();
   if(!techs.length){wrap.innerHTML='<div style="padding:12px;color:var(--muted);font-size:11px">Žiadne dáta.</div>';return;}
   let h=`<table class="cap-tbl"><thead><tr><th>Technik</th>`;
   dates.forEach(d=>{
