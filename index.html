@@ -698,6 +698,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div id="ustredna-box" style="position:absolute;top:90px;right:30px;width:330px;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);border:1px solid #cbd5e1;pointer-events:auto">
       <div id="ustredna-handle" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e2e8f0;cursor:grab;background:#f1f5f9;border-radius:12px 12px 0 0;user-select:none">
         <h3 style="margin:0;font-size:14px;font-weight:700;color:#1e293b">📞 Volanie cez ústredňu</h3>
+        <span id="ust-timer" style="font-size:13px;font-weight:700;color:#059669;font-variant-numeric:tabular-nums">00:00</span>
         <button onclick="zatvorUstredna()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;line-height:1;padding:2px 6px">✕</button>
       </div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
@@ -958,6 +959,30 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             </tr>
           </thead>
           <tbody id="ail-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Štatistika hovorov cez ústredňu – iba admin, stredisko-scoped na backende -->
+    <div id="ail-hovor-wrap" style="background:#fff;border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-top:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <h3 style="font-size:13px;font-weight:700;margin:0;color:#374151">📞 Štatistika hovorov cez ústredňu</h3>
+        <span style="font-size:11px;color:var(--muted)">(použije dátumový filter Od/Do vyššie)</span>
+        <button class="btn btn-accent btn-xs" onclick="hovorStatRefresh()" style="padding:6px 12px;margin-left:auto">🔄 Načítať</button>
+      </div>
+      <div id="ail-hovor-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px"></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb;border-bottom:1px solid var(--border2)">
+              <th style="text-align:left;padding:5px 6px;font-weight:600">Dispečér</th>
+              <th style="text-align:right;padding:5px 6px;font-weight:600">Počet hovorov</th>
+              <th style="text-align:right;padding:5px 6px;font-weight:600">Ukončených</th>
+              <th style="text-align:right;padding:5px 6px;font-weight:600">Celkový čas</th>
+              <th style="text-align:right;padding:5px 6px;font-weight:600">Priemer / hovor</th>
+            </tr>
+          </thead>
+          <tbody id="ail-hovor-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -1555,6 +1580,13 @@ function aiReTrigger(){
 let HOVOR_REZIM = 'ustredna-asist';
 const USTREDNA_CISLO = '0244851598';   // číslo ústredne Slovak Telekom
 
+// Meranie dĺžky hovoru – appka nevidí reálny koniec hovoru (ten prebieha
+// v Phone Linku mimo appky), preto meriame klik-to-klik: štart = klik na 📞,
+// koniec = zatvorenie panela ústredne (Hotovo alebo ✕).
+let aktivnyHovorId = null;
+let aktivnyHovorStart = null;
+let _hovorTimerInt = null;
+
 // Normalizuje telefónne číslo na formát E.164 (+421901234567).
 // Vstupy ako "0911 234 567", "00420 777", "+421-911-234-567" → +421911234567 atď.
 // Vracia '' ak číslo nedáva zmysel.
@@ -1602,13 +1634,17 @@ async function zacniHovor(rawCislo, idObj, kodAktivity){
   const kod = String(kodAktivity||'').replace(/\D/g,'');   // len číslice
   const lokal = naLokalneCislo(cislo);
 
-  // Audit log – tichý zápis na pozadí (nezdržuje hovor)
+  // Audit log – tichý zápis na pozadí (nezdržuje hovor). ID záznamu si
+  // uložíme, aby sme pri zatvorení panela (Hotovo/✕) vedeli dopočítať trvanie.
+  aktivnyHovorId = null;
+  aktivnyHovorStart = Date.now();
   api('POST', '/api/hovor/log', {
     id_obj: idObj || null,
     cislo:  cislo,
     vysledok: 'klik',
     poznamka: 'Ústredňa ' + USTREDNA_CISLO + (kod ? ' · kód ' + kod : '')
-  }).catch(e => console.warn('Hovor log zlyhal:', e.message));
+  }).then(r => { aktivnyHovorId = (r && r.id) ? r.id : null; })
+    .catch(e => console.warn('Hovor log zlyhal:', e.message));
 
   // Asistovaný režim – vytoč ústredňu a ukáž panel s údajmi na ručné naťukanie po IVR.
   if(!kod) toast('⚠ Chýba kód aktivity – po spojení ho doplň ručne');
@@ -1623,8 +1659,29 @@ function zobrazUstrednaPanel(lokal, kod, auto){
   document.getElementById('ust-info').innerHTML = 'Ústredňa <b>0244851598</b> sa vytáča. Po výzve naťukaj na telefóne:';
   document.getElementById('ustredna-modal').style.display = 'block';
   initUstrednaDrag();
+  // Tikajúci časovač dĺžky hovoru (klik-to-klik meranie)
+  clearInterval(_hovorTimerInt);
+  const timerEl = document.getElementById('ust-timer');
+  const tick = () => {
+    if(!aktivnyHovorStart || !timerEl) return;
+    const s = Math.floor((Date.now() - aktivnyHovorStart) / 1000);
+    timerEl.textContent = String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+  };
+  tick();
+  _hovorTimerInt = setInterval(tick, 1000);
 }
-function zatvorUstredna(){ document.getElementById('ustredna-modal').style.display = 'none'; }
+function zatvorUstredna(){
+  document.getElementById('ustredna-modal').style.display = 'none';
+  clearInterval(_hovorTimerInt);
+  // Zápis konca hovoru – appka takto meria trvanie, keďže samotný hovor
+  // prebieha mimo appky (Phone Link). Idempotentné na backende.
+  if(aktivnyHovorId){
+    const hid = aktivnyHovorId;
+    aktivnyHovorId = null;
+    api('PATCH', `/api/hovor/log/${hid}/koniec`, {}).catch(e => console.warn('Koniec hovoru sa nepodarilo zapísať:', e.message));
+  }
+  aktivnyHovorStart = null;
+}
 
 // Presúvateľnosť panela – ťahanie za hlavičku (idempotentné).
 let _ustDragInit=false;
@@ -6558,6 +6615,72 @@ function renderAiAnalytics(){
     _aiLogRenderAll();
   } else {
     aiLogRefresh();
+  }
+  // Štatistika hovorov cez ústredňu – vidí ju iba admin (backend by aj tak
+  // vrátil 403 pre vedenie, tu len skryjeme sekciu aby to nepýtalo zbytočne).
+  const hovorWrap = document.getElementById('ail-hovor-wrap');
+  if(hovorWrap){
+    if(currentUser?.rola === 'admin'){
+      hovorWrap.style.display = '';
+      hovorStatRefresh();
+    } else {
+      hovorWrap.style.display = 'none';
+    }
+  }
+}
+
+// Formátuje sekundy na m:ss (napr. 125 → "02:05")
+function _fmtHovorCas(sek){
+  sek = Math.round(sek || 0);
+  return String(Math.floor(sek/60)).padStart(2,'0') + ':' + String(sek%60).padStart(2,'0');
+}
+
+async function hovorStatRefresh(){
+  if(currentUser?.rola !== 'admin') return; // štatistika je len pre admina strediska
+  const kpiEl = document.getElementById('ail-hovor-kpi');
+  const tbodyEl = document.getElementById('ail-hovor-tbody');
+  if(!kpiEl || !tbodyEl) return;
+  const od = document.getElementById('ail-od')?.value || '';
+  const doD = document.getElementById('ail-do')?.value || '';
+  kpiEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">Načítavam…</div>';
+  try{
+    const q = new URLSearchParams();
+    if(od)  q.set('od', od);
+    if(doD) q.set('do', doD);
+    const s = await api('GET', '/api/hovor/statistika' + (q.toString() ? '?' + q.toString() : ''));
+    kpiEl.innerHTML = `
+      <div style="background:#f8fafc;border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--muted)">Počet hovorov</div>
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${s.pocet_hovorov}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--muted)">Ukončených (s trvaním)</div>
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${s.pocet_ukoncenych}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--muted)">Bez zápisu konca</div>
+        <div style="font-size:20px;font-weight:700;color:#b45309">${s.pocet_bez_konca}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--muted)">Celkový čas na telefóne</div>
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${_fmtHovorCas(s.celkovy_cas_sek)}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--muted)">Priemer / hovor</div>
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${_fmtHovorCas(s.priemerny_cas_sek)}</div>
+      </div>`;
+    const zoznam = s.podla_pouzivatela || [];
+    tbodyEl.innerHTML = zoznam.length ? zoznam.map(u => `
+      <tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:5px 6px">${u.meno}</td>
+        <td style="padding:5px 6px;text-align:right">${u.pocet_hovorov}</td>
+        <td style="padding:5px 6px;text-align:right">${u.pocet_ukoncenych}</td>
+        <td style="padding:5px 6px;text-align:right">${_fmtHovorCas(u.sucet_sek)}</td>
+        <td style="padding:5px 6px;text-align:right">${_fmtHovorCas(u.priemer_sek)}</td>
+      </tr>`).join('') : '<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--muted)">Žiadne dáta za zvolené obdobie</td></tr>';
+  }catch(e){
+    kpiEl.innerHTML = `<div style="color:#b91c1c;font-size:12px">Chyba načítania: ${e.message}</div>`;
+    tbodyEl.innerHTML = '';
   }
 }
 
