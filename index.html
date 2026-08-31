@@ -1507,7 +1507,10 @@ function patchObj(id, payload, opts){
   _pendingPatches.add(id);
   const _pid = id;   // snapshot – pre .finally(), aby delete použil správne id
                      // aj keby sa premenná v callerovi medzitým zmenila
-  return api('PATCH', `/api/objednavky/${_pid}`, payload)
+  // encodeURIComponent: id_obj môže obsahovať znaky ako '#', ktoré by inak
+  // prehliadač orezal ako URL fragment (# a všetko za ním sa nikdy neodošle
+  // na server) – bez tohto by PATCH tíško zlyhal 404 na akékoľvek ID so '#'.
+  return api('PATCH', `/api/objednavky/${encodeURIComponent(_pid)}`, payload)
     .catch(silent ? ()=>{} : e => toast('⚠ API chyba: '+e.message))
     .finally(() => {
       // Buffer 2s pred uvoľnením guardu: chráni pred in-flight polling GET
@@ -3564,7 +3567,7 @@ function zapisObjednavku(){
     // PATCH duplicity: guard + custom error handler (aj setStatus)
     _pendingPatches.add(idObj);
     const _pid = idObj;
-    api('PATCH', `/api/objednavky/${_pid}`, apiData)
+    api('PATCH', `/api/objednavky/${encodeURIComponent(_pid)}`, apiData)
       .catch(e => { toast('⚠ API chyba: '+e.message); setStatus('Chyba uloženia','err'); })
       .finally(() => setTimeout(() => _pendingPatches.delete(_pid), 2000));
   } else {
@@ -5857,7 +5860,7 @@ function logHistoria(id_obj,akcia,detail){
 
 async function zobrazHistoriu(id_obj){
   try{
-    const rows=await api('GET',`/api/historia/${id_obj}`);
+    const rows=await api('GET',`/api/historia/${encodeURIComponent(id_obj)}`);
     if(!rows.length){toast('Žiadna história zmien');return;}
     const w=window.open('','_blank','width=600,height=500');
     const html=rows.map(r=>`<tr>
