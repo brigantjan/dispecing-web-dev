@@ -1529,6 +1529,22 @@ let mwfActiveItem=null;
 // UTILITY
 // ════════════════════════════════════════════════════════════
 function fmtD(iso){if(!iso)return"";const[y,m,d]=iso.split('-');return`${+d}.${+m}.${y}`;}
+// Excel dátum ako číslo (serial) – potrebné, aby export.xlsx obsahoval REÁLNE
+// dátumy (triediteľné/filtrovateľné podľa mesiaca v Exceli), nie text.
+function _excelSerial(y,m,d){return Math.round((Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000);}
+function _isoToSerial(iso){
+  if(!iso) return null;
+  const p=String(iso).split('-');
+  if(p.length!==3) return null;
+  const s=_excelSerial(+p[0],+p[1],+p[2]);
+  return isNaN(s)?null:s;
+}
+function _slovakToSerial(txt){
+  const m=String(txt||'').trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(!m) return null;
+  const s=_excelSerial(+m[3],+m[2],+m[1]);
+  return isNaN(s)?null:s;
+}
 function iso2date(iso){if(!iso)return null;return new Date(iso+'T00:00:00');}
 function date2iso(d){if(!d)return"";return[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
 function farbaCls(f){return f==='zelena'?'tr-green':f==='zlta'?'tr-yellow':f==='modra'?'tr-blue':f==='cervena'?'tr-red':'tr-none';}
@@ -5356,6 +5372,7 @@ function exportExcel(){
   // Štýly
   const stylesXml=`<?xml version="1.0" encoding="UTF-8"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="d.m.yyyy"/></numFmts>
 <fonts><font><sz val="11"/><name val="Calibri"/></font>
 <font><sz val="11"/><name val="Calibri"/><b/><color rgb="FFFFFFFF"/></font>
 <font><sz val="11"/><name val="Calibri"/><color rgb="FF1B5E20"/></font>
@@ -5381,9 +5398,19 @@ function exportExcel(){
 <xf numFmtId="0" fontId="4" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="0" fontId="5" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="0" fontId="6" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="2" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="3" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="4" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="5" fillId="6" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="6" fillId="7" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
 </cellXfs></styleSheet>`;
 
   const styleIdx={'tr-green':2,'tr-yellow':3,'tr-blue':4,'tr-red':5,'tr-none':6};
+  const dateStyleIdx={'tr-green':7,'tr-yellow':8,'tr-blue':9,'tr-red':10,'tr-none':11};
+  // Indexy stĺpcov, ktoré obsahujú dátum (poradie zodpovedá `cols` vyššie:
+  // Prijatie, Realizácia, Plán, LT) – tie sa zapíšu ako reálny Excel dátum,
+  // nie ako text, aby sa dali v Exceli triediť a filtrovať podľa mesiaca/roka.
+  const DATE_COLS=new Set([5,6,7,9]);
 
   // Sheet data
   const numCols=cols.length;
@@ -5393,8 +5420,18 @@ function exportExcel(){
   sheetRows+=`</row>`;
   dataRows.forEach((dr,ri)=>{
     const si=styleIdx[dr.fk]||6;
+    const dsi=dateStyleIdx[dr.fk]||11;
     sheetRows+=`<row r="${ri+2}">`;
-    dr.cells.forEach((v,c)=>{sheetRows+=`<c r="${cellRef(ri+1,c)}" s="${si}" t="inlineStr"><is><t>${v}</t></is></c>`;});
+    dr.cells.forEach((v,c)=>{
+      if(DATE_COLS.has(c)){
+        const serial=_slovakToSerial(v);
+        sheetRows+=(serial===null)
+          ? `<c r="${cellRef(ri+1,c)}" s="${dsi}"/>`
+          : `<c r="${cellRef(ri+1,c)}" s="${dsi}"><v>${serial}</v></c>`;
+      } else {
+        sheetRows+=`<c r="${cellRef(ri+1,c)}" s="${si}" t="inlineStr"><is><t>${v}</t></is></c>`;
+      }
+    });
     sheetRows+=`</row>`;
   });
 
@@ -5529,11 +5566,13 @@ function dailyBackupExport(opts={}){
   // Pripravíme dáta v rovnakom tvare ako exportExcel
   const dataRows=rows.map(o=>{
     const cells=cols.map(c=>{
-      let v;
-      if(c.k==='_doLT') v=_calcDoLtDays(o.plan,o.lt);
-      else if(c.d)      v=fmtD(o[c.k]||'');
-      else              v=o[c.k]||'';
-      return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if(c.k==='_doLT') return {v:String(_calcDoLtDays(o.plan,o.lt)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'), iso:null};
+      // Dátumové stĺpce (c.d===1): iso sa nechá surové (YYYY-MM-DD), aby sa
+      // nižšie zapísali ako reálny Excel dátum (serial), nie ako text –
+      // inak sa v Exceli nedá triediť/filtrovať podľa mesiaca.
+      if(c.d)           return {v:'', iso:o[c.k]||''};
+      const v=o[c.k]||'';
+      return {v:String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'), iso:null};
     });
     return {cells, fk:o.farba||''};
   });
@@ -5554,7 +5593,16 @@ function dailyBackupExport(opts={}){
           ...dataRows.map((dr,ri)=>{
             const r=ri+2;
             const styleIdx=2+['zelena','zlta','modra',''].indexOf(dr.fk); // 2..5
-            return `<row r="${r}">${dr.cells.map((v,i)=>`<c r="${colLetter(i)}${r}" t="inlineStr" s="${styleIdx}"><is><t>${v}</t></is></c>`).join('')}</row>`;
+            const dateStyleIdx=6+['zelena','zlta','modra',''].indexOf(dr.fk); // 6..9
+            return `<row r="${r}">${dr.cells.map((cell,i)=>{
+              if(cell.iso!==null){
+                const serial=_isoToSerial(cell.iso);
+                return serial===null
+                  ? `<c r="${colLetter(i)}${r}" s="${dateStyleIdx}"/>`
+                  : `<c r="${colLetter(i)}${r}" s="${dateStyleIdx}"><v>${serial}</v></c>`;
+              }
+              return `<c r="${colLetter(i)}${r}" t="inlineStr" s="${styleIdx}"><is><t>${cell.v}</t></is></c>`;
+            }).join('')}</row>`;
           })
         ].join('');
         const lastCol=colLetter(headers.length-1);
@@ -5579,15 +5627,18 @@ function dailyBackupExport(opts={}){
         const cellXfs=[
           '<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>',
           '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>',
-          ...[0,1,2,3].map(i=>`<xf numFmtId="0" fontId="${2+i}" fillId="${3+i}" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>`)
+          ...[0,1,2,3].map(i=>`<xf numFmtId="0" fontId="${2+i}" fillId="${3+i}" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>`),
+          // 6..9 = rovnaké farby ako 2..5, ale s dátumovým formátom (pre stĺpce Prijatie/Realizácia/Plán/LT)
+          ...[0,1,2,3].map(i=>`<xf numFmtId="164" fontId="${2+i}" fillId="${3+i}" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>`)
         ].join('');
         const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="d.m.yyyy"/></numFmts>
 <fonts count="6">${fonts}</fonts>
 <fills count="7">${fills}</fills>
 <borders count="2"><border/>${borders}</borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="6">${cellXfs}</cellXfs>
+<cellXfs count="10">${cellXfs}</cellXfs>
 </styleSheet>`;
         const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -5951,9 +6002,11 @@ function generujVykaz(technik,mesiac){
   const storno=riadky.filter(o=>o.farba==='zlta').length;
   const otvorene=riadky.length-uzavrete-storno;
   const cols=['ID','Meno zákazníka','Adresa','Typ','Balík','Prijatie','Plán','Realizácia','Technik','Stav'];
+  // Prijatie/Plán/Realizácia sa posielajú v surovom ISO tvare (nie fmtD text) –
+  // _exportDoExcelu ich pre stĺpce v dateCols zapíše ako reálny Excel dátum.
   const dataRows=riadky.map(o=>[
     o.id_obj,o.meno,o.adresa,o.typ,o.balik,
-    fmtD(o.prijatia),fmtD(o.plan),fmtD(o.real),o.zdroj,
+    o.prijatia||'',o.plan||'',o.real||'',o.zdroj,
     o.farba==='zelena'?'Uzavreté':o.farba==='zlta'?'Storno':'Otvorené'
   ]);
 
@@ -5962,7 +6015,7 @@ function generujVykaz(technik,mesiac){
 
   // Generuj Excel pomocou JSZip (rovnaká logika ako exportExcel)
   _exportDoExcelu({
-    cols, dataRows,
+    cols, dataRows, dateCols:[5,6,7],
     nazovListu:`Výkaz ${mesiac} ${technik||''}`.slice(0,31),
     subor:`vykaz_${technik||'vsetci'}_${mesiac}.xlsx`,
     sumarika:[
@@ -5973,13 +6026,15 @@ function generujVykaz(technik,mesiac){
   toast(`✓ Výkaz: ${riadky.length} objednávok`);
 }
 
-function _exportDoExcelu({cols, dataRows, nazovListu, subor, sumarika}){
+function _exportDoExcelu({cols, dataRows, nazovListu, subor, sumarika, dateCols}){
+  const DATE_COLS=new Set(dateCols||[]);
   const dnes=new Date().toISOString().slice(0,10);
   const widths=cols.map(c=>Math.max(c.length,12));
   const colsXml=widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('');
 
   const stylesXml=`<?xml version="1.0" encoding="UTF-8"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="d.m.yyyy"/></numFmts>
 <fonts><font><sz val="11"/><name val="Calibri"/></font>
 <font><sz val="11"/><name val="Calibri"/><b/><color rgb="FFFFFFFF"/></font>
 <font><sz val="10"/><name val="Calibri"/><i/><color rgb="FF555555"/></font></fonts>
@@ -5995,6 +6050,7 @@ function _exportDoExcelu({cols, dataRows, nazovListu, subor, sumarika}){
 <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment horizontal="center"/></xf>
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
 <xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
 </cellXfs></styleSheet>`;
 
   function esc(v){return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -6016,7 +6072,16 @@ function _exportDoExcelu({cols, dataRows, nazovListu, subor, sumarika}){
   // Dáta
   dataRows.forEach(row=>{
     sheetRows+=`<row r="${r+1}">`;
-    row.forEach((v,c)=>{sheetRows+=`<c r="${cellRef(r,c)}" s="2" t="inlineStr"><is><t>${esc(v)}</t></is></c>`;});
+    row.forEach((v,c)=>{
+      if(DATE_COLS.has(c)){
+        const serial=_isoToSerial(v);
+        sheetRows+=(serial===null)
+          ? `<c r="${cellRef(r,c)}" s="4"/>`
+          : `<c r="${cellRef(r,c)}" s="4"><v>${serial}</v></c>`;
+      } else {
+        sheetRows+=`<c r="${cellRef(r,c)}" s="2" t="inlineStr"><is><t>${esc(v)}</t></is></c>`;
+      }
+    });
     sheetRows+=`</row>`;r++;
   });
 
