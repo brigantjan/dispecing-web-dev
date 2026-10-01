@@ -2464,48 +2464,72 @@ function subSwitch(mode){
   document.getElementById('mwf-panel').classList.toggle('hidden',!a);
   document.getElementById('manual-panel').classList.toggle('hidden',a);
 }
+// Veľkosť jednej dávky pri načítavaní IMAP mailov. Pri veľkom návale (napr. 800
+// mailov naraz v BA) sa maily sťahujú po menších dávkach namiesto jedného
+// obrovského requestu – medzi dávkami appka "dýcha" a neblokuje ostatných
+// používateľov (iné strediská) na dlhý čas. Pri probléme s IMAP serverom
+// (36h blok pri podozrivej aktivite) je väčšia dávka bezpečnejšia než malá,
+// lebo znižuje počet IMAP prihlásení – pri úprave zváž tento kompromis.
+const MWF_BATCH_SIZE=25;
+
 async function mwfLoad(){
   setStatus('Načítavam maily z IMAP...','info');
   try{
     // Najprv zisti ktoré UID sú stále UNSEEN na serveri
     const unseenResp=await api('GET','/api/imap/unseen-uids').catch(()=>({uids:[]}));
-    const unseenSet=new Set(unseenResp.uids||[]);
+    const unseenList=unseenResp.uids||[];
+    const unseenSet=new Set(unseenList);
 
     // Odstráň z fronty maily ktoré používateľ medzitým prečítal v Outlooku
     const pred=mwfQueue.length;
     mwfQueue=mwfQueue.filter(i=>!i.mail_uid||unseenSet.has(i.mail_uid));
     const removed=pred-mwfQueue.length;
 
-    // Načítaj nové maily
-    const mails=await api('GET','/api/imap/fetch');
+    // Načítaj nové maily po dávkach (nie všetky naraz v jednom requeste)
     let added=0;
-    mails.forEach(m=>{
-      if(mwfQueue.find(i=>i.mail_uid===m.mail_uid)) return;
-      const item={
-        id_objednavky:  m.parsed?.id_obj||'',
-        meno:           m.parsed?.meno||'',
-        adresa:         m.parsed?.adresa||'',
-        typ:            m.parsed?.typ||'',
-        balik:          m.parsed?.balik||'',
-        datum_prijatia: m.parsed?.datum_prijatia||T,  // dátum z mailu
-        lt:             m.parsed?.lt||'',
-        termin_d:       m.parsed?.datum_plan||'',
-        add:            m.parsed?.add_txt||'',
-        telefon:        m.parsed?.poznamky||'',
-        kod_aktivity:   m.parsed?.kod_aktivity||'',
-        region:         m.parsed?.region||'',  // ECV okres zo subjectu/PDF
-        cas_od:         m.parsed?.cas_od||'',  // Termín z predaja: čas od
-        cas_do:         m.parsed?.cas_do||'',
-        termin_z_predaja: !!m.parsed?.termin_z_predaja,
-        mail_uid:       m.mail_uid,
-        subject:        m.subject,
-        _is_dup:        !!MOCK_OBJ.find(o=>o.id_obj===m.parsed?.id_obj),
-        _no_parse:      !m.has_order,
-      };
-      mwfQueue.push(item);
-      added++;
-    });
-    renderMwfList();updateMwfBadge();
+    const total=unseenList.length;
+    for(let off=0; off<total; off+=MWF_BATCH_SIZE){
+      const chunk=unseenList.slice(off, off+MWF_BATCH_SIZE);
+      if(total>MWF_BATCH_SIZE){
+        setStatus(`Načítavam maily… ${Math.min(off+MWF_BATCH_SIZE,total)}/${total}`,'info');
+      }
+      let mails=[];
+      try{
+        mails=await api('GET','/api/imap/fetch?uids='+encodeURIComponent(chunk.join(',')));
+      }catch(e){
+        toast('⚠ Dávka preskočená: '+e.message);
+        continue;
+      }
+      mails.forEach(m=>{
+        if(mwfQueue.find(i=>i.mail_uid===m.mail_uid)) return;
+        const item={
+          id_objednavky:  m.parsed?.id_obj||'',
+          meno:           m.parsed?.meno||'',
+          adresa:         m.parsed?.adresa||'',
+          typ:            m.parsed?.typ||'',
+          balik:          m.parsed?.balik||'',
+          datum_prijatia: m.parsed?.datum_prijatia||T,  // dátum z mailu
+          lt:             m.parsed?.lt||'',
+          termin_d:       m.parsed?.datum_plan||'',
+          add:            m.parsed?.add_txt||'',
+          telefon:        m.parsed?.poznamky||'',
+          kod_aktivity:   m.parsed?.kod_aktivity||'',
+          region:         m.parsed?.region||'',  // ECV okres zo subjectu/PDF
+          cas_od:         m.parsed?.cas_od||'',  // Termín z predaja: čas od
+          cas_do:         m.parsed?.cas_do||'',
+          termin_z_predaja: !!m.parsed?.termin_z_predaja,
+          mail_uid:       m.mail_uid,
+          subject:        m.subject,
+          _is_dup:        !!MOCK_OBJ.find(o=>o.id_obj===m.parsed?.id_obj),
+          _no_parse:      !m.has_order,
+        };
+        mwfQueue.push(item);
+        added++;
+      });
+      // Priebežne vykresli – dispečér môže začať pracovať na prvej dávke,
+      // kým sa zvyšok ešte sťahuje na pozadí.
+      renderMwfList();updateMwfBadge();
+    }
     const msg='IMAP: '+added+' nových'+(removed?' · '+removed+' prečítaných odstránených':'');
     setStatus(msg,'ok');
     toast('↻ '+msg);
