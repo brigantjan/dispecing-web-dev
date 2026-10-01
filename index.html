@@ -2487,6 +2487,7 @@ async function mwfLoad(){
 
     // Načítaj nové maily po dávkach (nie všetky naraz v jednom requeste)
     let added=0;
+    let memStopped=false;
     const total=unseenList.length;
     for(let off=0; off<total; off+=MWF_BATCH_SIZE){
       const chunk=unseenList.slice(off, off+MWF_BATCH_SIZE);
@@ -2501,6 +2502,12 @@ async function mwfLoad(){
         continue;
       }
       mails.forEach(m=>{
+        if(m._mem_stop){
+          // Backend sám bezpečne zastavil spracovanie kvôli pamäti – zvyšné
+          // maily ostávajú na serveri neprečítané a ponúknu sa znova nabudúce.
+          memStopped=true;
+          return;
+        }
         if(mwfQueue.find(i=>i.mail_uid===m.mail_uid)) return;
         const item={
           id_objednavky:  m.parsed?.id_obj||'',
@@ -2529,10 +2536,17 @@ async function mwfLoad(){
       // Priebežne vykresli – dispečér môže začať pracovať na prvej dávke,
       // kým sa zvyšok ešte sťahuje na pozadí.
       renderMwfList();updateMwfBadge();
+      if(memStopped){
+        toast('⏸ Appka si šetrí pamäť – zvyšok mailov načítaj znova tlačidlom "Načítať" o chvíľu');
+        setStatus(`Prerušené kvôli pamäti – ${added} načítaných, zvyšok skús znova neskôr`,'info');
+        break;
+      }
     }
-    const msg='IMAP: '+added+' nových'+(removed?' · '+removed+' prečítaných odstránených':'');
-    setStatus(msg,'ok');
-    toast('↻ '+msg);
+    if(!memStopped){
+      const msg='IMAP: '+added+' nových'+(removed?' · '+removed+' prečítaných odstránených':'');
+      setStatus(msg,'ok');
+      toast('↻ '+msg);
+    }
   }catch(e){
     setStatus('IMAP chyba: '+e.message,'err');
     toast('⚠ IMAP: '+e.message);
