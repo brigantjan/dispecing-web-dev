@@ -2742,6 +2742,35 @@ const OKRES_FROM_OBEC = {
   'považská':'PB','pruské':'PB','domaniža':'PB','papradno':'PB','plevník':'PB','beluša':'PB',
   'dolná mariková':'PB','horná mariková':'PB','prečín':'PB','jasenica':'PB','udiča':'PB',
   'sverepec':'PB','visolaje':'PB',
+  // ── Stredisko Trenčín (10/2026): okresné mestá a najčastejšie obce. ──
+  // Bez týchto záznamov detectOkres() vracal '' a filter regiónov technika
+  // sa pri manuálnej objednávke vôbec neuplatnil. Zoznam dopĺňaj podľa praxe.
+  // TN okres
+  'trenčín':'TN','soblahov':'TN','trenčianske':'TN','nemšová':'TN','drietoma':'TN',
+  'kubrá':'TN','kubra':'TN','zlatovce':'TN','opatová':'TN',
+  'chocholná':'TN','horná súča':'TN','dolná súča':'TN','mníchova lehota':'TN',
+  // NM okres
+  'nové mesto nad váhom':'NM','stará turá':'NM','beckov':'NM','bošáca':'NM',
+  // BN okres
+  'bánovce':'BN','uhrovec':'BN',
+  // HC okres
+  'hlohovec':'HC',
+  // PE okres
+  'partizánske':'PE','bošany':'PE',
+  // PN okres
+  'piešťany':'PN','vrbové':'PN',
+  // TO okres
+  'topoľčany':'TO',
+  // MA / SE / SI okresy
+  'malacky':'MA','senica':'SE','skalica':'SI',
+  // ── Stredisko Bratislava (10/2026): okresy BA, MA, PK, SE (Senec), TT ──
+  'bratislava':'BA','petržalka':'BA','ružinov':'BA','dúbravka':'BA','karlova ves':'BA',
+  'rača':'BA','vajnory':'BA','lamač':'BA','devín':'BA','vrakuňa':'BA','podunajské biskupice':'BA',
+  'záhorská bystrica':'BA',
+  'stupava':'MA',
+  'pezinok':'PK','svätý jur':'PK','šenkvice':'PK',
+  'senec':'SE','bernolákovo':'SE','ivanka pri dunaji':'SE',
+  'trnava':'TT',
 };
 
 // Detekcia ECV okresu z adresy (substring lookup obcí). Vracia '' ak nezistené.
@@ -3434,11 +3463,17 @@ function aiTrigger(){
   const planFmt = fmtD(result.plan);
   const regionLbl = result.region && result.region!=='INE' ? ` · región: <strong>${result.region}</strong>` : '';
 
+  // Okres nezistený (adresa nie je v zozname obcí a pole Okres je prázdne) ->
+  // filter regiónov technika sa NEUPLATNÍ. Povedz to dispečerovi nahlas.
+  const _noOkresHint = (!okresVal && result.technik && (TECHNICI_DETAIL[result.technik]?.regiony||'').trim())
+    ? ` <span style="color:#b45309;font-size:11px">⚠ okres nezistený – región technika sa nefiltroval, zadaj okres do poľa Okres</span>`
+    : '';
+
   if(result.dovod === 'ok'){
     hint.className = 'ai-hint ' + (isPreRez ? 'warn' : 'ok');
     hint.innerHTML = `💡 AI návrh: <strong>${result.technik}</strong> | <strong>${planFmt}</strong>${regionLbl}${twLabel}`
                    + ` <span style="color:#94a3b8;font-size:11px">(skóre ${result.skore})</span>`
-                   + prerezHint;
+                   + prerezHint + _noOkresHint;
   }
   else if(result.dovod === 'ok-tzp'){
     hint.className = 'ai-hint ok';
