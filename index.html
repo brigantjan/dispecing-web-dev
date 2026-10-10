@@ -2605,19 +2605,28 @@ async function _mwfLoadImpl(){
     toast('⚠ IMAP: '+e.message);
   }
 }
+// Skrátený názov obce pre riadok MWF: posledné slovo celé, predchádzajúce len prvé písmeno s bodkou.
+// "Považská Bystrica" -> "P.Bystrica", "Kysucké nové Mesto" -> "K.n.Mesto", "Turzovka" -> "Turzovka"
+function mwfObecSkratka(obec){
+  const w=String(obec||'').trim().split(/\s+/).filter(Boolean);
+  if(w.length<=1) return w[0]||'';
+  return w.slice(0,-1).map(x=>x.charAt(0)+'.').join('')+w[w.length-1];
+}
 function renderMwfList(){
   const el=document.getElementById('mwf-list');
   if(!mwfQueue.length){el.innerHTML='<div style="font-size:11px;color:var(--muted)">Žiadne nové objednávky.</div>';return;}
+  const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   el.innerHTML=mwfQueue.map((it,idx)=>{
-    const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const txt=_e([it.id_objednavky,it.meno,it.datum_prijatia,it.typ].filter(Boolean).join('  '));
-    // Okres (ECV skratka) + obec/mesto zo začiatku adresy ("Obec, Ulica č.") – napr. "CA Turzovka"
-    const _obec=((it.adresa||'').split(',')[0]||'').trim();
+    // Poradie v riadku: OKRES Obec | TYP BALÍK | ID | meno | dátum prijatia
+    const _obec=mwfObecSkratka(((it.adresa||'').split(',')[0]||'').trim());
     const _okres=((it.region||'').trim()||detectOkres(it.adresa||'')).toUpperCase();
-    const _loc=[_okres,_obec].filter(Boolean).join(' ');
-    const locHtml=_loc?`<strong style="color:#0f4c81">${_e(_loc)}</strong>  `:'';
+    const loc=[_okres,_obec].filter(Boolean).join(' ');
+    const typBalik=[it.typ,it.balik].filter(Boolean).join(' ');
+    const txt=_e([loc,typBalik,it.id_objednavky,it.meno,it.datum_prijatia].filter(Boolean).join('  '));
+    // Aktivačná objednávka (ADD) = celý riadok tučne, ostatné normálne
+    const isAdd=String(it.add||'').trim().toUpperCase()==='A';
     return`<div class="mwf-item${it._is_dup?' dup':''}">
-      <span class="mwf-txt">${locHtml}${txt}</span>
+      <span class="mwf-txt" style="font-weight:${isAdd?'700':'400'}">${txt}</span>
       ${it._is_dup?'<span class="mwf-dup-badge">duplikát</span>':''}
       <button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})">Zapíš</button>
       <button class="btn btn-red btn-xs" onclick="mwfVymaz(${idx})">Vymaž</button>
