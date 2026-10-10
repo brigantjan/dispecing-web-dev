@@ -254,6 +254,13 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .imap-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 /* ─── ROLE CSS – riadené JS (applyRole) ───────────────────── */
 @keyframes spin{to{transform:rotate(360deg)}}
+.spin-sm{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+.spin-sm.dark{border-color:#cbd5e1;border-top-color:var(--accent)}
+button.is-busy{opacity:.75;cursor:wait!important;pointer-events:none}
+.busy-bar{display:none;align-items:center;gap:8px;background:#fff8e1;border:1px solid #ffe082;color:#92400e;border-radius:5px;padding:5px 9px;margin-bottom:4px;font-size:12px;font-weight:600}
+.busy-bar.show{display:flex}
+#l-busy{display:none;margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
+#l-busy.show{display:block}
 .hide-shell{display:none!important}
 body[data-role="technik"] .sidebar,
 body[data-role="technik"] .tabbar,
@@ -382,7 +389,8 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <div class="llogo"><div class="lt">DISPECING</div><div class="ls">SUPTEL · Správa zriaďovacích objednávok</div></div>
   <div class="fg"><label>Email</label><input type="email" id="l-email" placeholder="email@suptel.sk" autocomplete="off"></div>
   <div class="fg"><label>Heslo</label><input type="password" id="l-pass" placeholder="Heslo" autocomplete="off"></div>
-  <button class="btnp" onclick="doLogin()">Prihlásiť sa</button>
+  <button class="btnp" id="btn-login" onclick="doLogin()">Prihlásiť sa</button>
+  <div id="l-busy"><span class="spin-sm dark"></span>Pracujem… prihlasujem a načítavam dáta, prosím neklikajte znova.</div>
   <div id="l-err" class="errmsg hidden"></div>
 </div>
 </div>
@@ -467,8 +475,9 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div id="mwf-panel" style="padding:5px 8px">
         <div class="mwf-box">
           <div class="mwf-hdr">Objednávky z mailu (Zapíš=predvyplniť | Vymaž=označiť prečítané)
-            <button id="btn-zastupujem" class="btn btn-xs" style="margin-left:auto;display:none;background:#f3f4f6;border:1px solid var(--border2);color:var(--text)" onclick="zastupOpen()" title="Zastupujem kolegyňu – čítať aj jej maily"><span id="zastup-icon">🔀</span> <span id="zastup-label">Zastupujem</span></button><button class="btn btn-accent btn-xs" onclick="mwfLoad()">↻ Načítať</button>
+            <button id="btn-zastupujem" class="btn btn-xs" style="margin-left:auto;display:none;background:#f3f4f6;border:1px solid var(--border2);color:var(--text)" onclick="zastupOpen()" title="Zastupujem kolegyňu – čítať aj jej maily"><span id="zastup-icon">🔀</span> <span id="zastup-label">Zastupujem</span></button><button class="btn btn-accent btn-xs" id="btn-mwf-load" onclick="mwfLoad()">↻ Načítať</button>
           </div>
+          <div id="mwf-busy" class="busy-bar"><span class="spin-sm dark"></span><span id="mwf-busy-txt">Pracujem…</span></div>
           <div id="mwf-list"></div>
         </div>
       </div>
@@ -2004,11 +2013,31 @@ function startHDrag(e,divId,topId,botId){
 // ════════════════════════════════════════════════════════════
 // LOGIN / LOGOUT
 // ════════════════════════════════════════════════════════════
+let _loginBusy=false;
+function _loginSetBusy(on){
+  _loginBusy=on;
+  const b=document.getElementById('btn-login');
+  if(b){
+    b.disabled=on;
+    b.classList.toggle('is-busy',on);
+    b.innerHTML=on?'<span class="spin-sm"></span>Pracujem…':'Prihlásiť sa';
+  }
+  document.getElementById('l-busy')?.classList.toggle('show',on);
+}
+// Enter v poliach Email/Heslo = Prihlásiť sa
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter' && (e.target.id==='l-email'||e.target.id==='l-pass')){
+    e.preventDefault();
+    doLogin();
+  }
+});
 function doLogin(){
+  if(_loginBusy) return;   // ochrana proti opakovanému kliku/Enteru
   const email=document.getElementById('l-email').value.trim().toLowerCase();
   const pass=document.getElementById('l-pass').value;
   const err=document.getElementById('l-err');
   err.classList.add('hidden');
+  _loginSetBusy(true);
   setStatus('Prihlasovanie...','info');
 
   api('POST','/api/login',{email,heslo:pass}).then(async data=>{
@@ -2086,7 +2115,7 @@ function doLogin(){
     err.textContent=e.message||'Nesprávny email alebo heslo.';
     err.classList.remove('hidden');
     setStatus('Chyba prihlásenia','err');
-  });
+  }).finally(()=>{ _loginSetBusy(false); });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2472,7 +2501,30 @@ function subSwitch(mode){
 // lebo znižuje počet IMAP prihlásení – pri úprave zváž tento kompromis.
 const MWF_BATCH_SIZE=25;
 
+let _mwfBusy=false;
+function mwfBusyText(t){
+  const el=document.getElementById('mwf-busy-txt'); if(el) el.textContent=t;
+  const b=document.getElementById('btn-mwf-load');
+  if(b && _mwfBusy) b.innerHTML='<span class="spin-sm"></span>Pracujem…';
+}
+function _mwfSetBusy(on){
+  _mwfBusy=on;
+  const b=document.getElementById('btn-mwf-load');
+  if(b){
+    b.disabled=on;
+    b.classList.toggle('is-busy',on);
+    b.innerHTML=on?'<span class="spin-sm"></span>Pracujem…':'↻ Načítať';
+  }
+  document.getElementById('mwf-busy')?.classList.toggle('show',on);
+}
 async function mwfLoad(){
+  if(_mwfBusy) return;   // ochrana proti opakovanému kliku
+  _mwfSetBusy(true);
+  mwfBusyText('Pracujem… zisťujem neprečítané maily (neklikajte znova)');
+  try{ await _mwfLoadImpl(); }
+  finally{ _mwfSetBusy(false); }
+}
+async function _mwfLoadImpl(){
   setStatus('Načítavam maily z IMAP...','info');
   try{
     // Najprv zisti ktoré UID sú stále UNSEEN na serveri
@@ -2494,6 +2546,7 @@ async function mwfLoad(){
       if(total>MWF_BATCH_SIZE){
         setStatus(`Načítavam maily… ${Math.min(off+MWF_BATCH_SIZE,total)}/${total}`,'info');
       }
+      mwfBusyText(`Pracujem… načítavam maily ${Math.min(off+MWF_BATCH_SIZE,total)}/${total} (neklikajte znova)`);
       let mails=[];
       try{
         mails=await api('GET','/api/imap/fetch?uids='+encodeURIComponent(chunk.join(',')));
@@ -2556,9 +2609,15 @@ function renderMwfList(){
   const el=document.getElementById('mwf-list');
   if(!mwfQueue.length){el.innerHTML='<div style="font-size:11px;color:var(--muted)">Žiadne nové objednávky.</div>';return;}
   el.innerHTML=mwfQueue.map((it,idx)=>{
-    const txt=[it.id_objednavky,it.meno,it.datum_prijatia,it.typ].filter(Boolean).join('  ');
+    const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const txt=_e([it.id_objednavky,it.meno,it.datum_prijatia,it.typ].filter(Boolean).join('  '));
+    // Okres (ECV skratka) + obec/mesto zo začiatku adresy ("Obec, Ulica č.") – napr. "CA Turzovka"
+    const _obec=((it.adresa||'').split(',')[0]||'').trim();
+    const _okres=((it.region||'').trim()||detectOkres(it.adresa||'')).toUpperCase();
+    const _loc=[_okres,_obec].filter(Boolean).join(' ');
+    const locHtml=_loc?`<strong style="color:#0f4c81">${_e(_loc)}</strong>  `:'';
     return`<div class="mwf-item${it._is_dup?' dup':''}">
-      <span class="mwf-txt">${txt}</span>
+      <span class="mwf-txt">${locHtml}${txt}</span>
       ${it._is_dup?'<span class="mwf-dup-badge">duplikát</span>':''}
       <button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})">Zapíš</button>
       <button class="btn btn-red btn-xs" onclick="mwfVymaz(${idx})">Vymaž</button>
