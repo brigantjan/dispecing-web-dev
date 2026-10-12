@@ -1289,7 +1289,44 @@ function apiToMock(o){
     cas_do:    o.cas_do||'',
     stredisko: o.stredisko||'zilina',
     region:    o.region||'',
+    _id:       o.id||0,   // poradie (DB id) – pre zoradenie po delta zlúčení
   };
+}
+
+// ── Delta polling: pomocné funkcie ──────────────────────────────
+let _syncWM=0;          // max(zmeneny) zo SERVERA (ms) – nikdy z lokálneho času
+let _lastFullSync=0;    // kedy bol naposledy stiahnutý celý zoznam
+const FULL_SYNC_MS=5*60*1000;   // poistka: úplná synchronizácia každých 5 min
+const DELTA_OVERLAP_MS=120*1000; // prekryv okna (oneskorené commity, rozdiel hodín)
+function _bumpWM(rows){
+  for(const r of rows){
+    const t=r.zmeneny?Date.parse(r.zmeneny):NaN;
+    if(!isNaN(t)&&t>_syncWM)_syncWM=t;
+  }
+}
+function _sortObj(arr){
+  // rovnaké poradie ako server: datum_prijatia asc (prázdne na koniec), potom id asc
+  arr.sort((a,b)=>{
+    const pa=a.prijatia||'￿', pb=b.prijatia||'￿';
+    return pa<pb?-1:pa>pb?1:(a._id||0)-(b._id||0);
+  });
+  return arr;
+}
+// Zlúči zmenené riadky do MOCK_OBJ. Vráti true ak sa niečo zmenilo.
+function _mergeDelta(rows){
+  if(!rows.length)return false;
+  const idx=new Map();
+  MOCK_OBJ.forEach((o,i)=>idx.set(o.id_obj,i));
+  let added=false;
+  for(const r of rows){
+    if(_pendingPatches.has(r.id_obj))continue; // rozpracovaná lokálna zmena má prednosť
+    const m=apiToMock(r);
+    const i=idx.get(r.id_obj);
+    if(i===undefined){MOCK_OBJ.push(m);idx.set(r.id_obj,MOCK_OBJ.length-1);added=true;}
+    else MOCK_OBJ[i]=m;
+  }
+  _sortObj(MOCK_OBJ); // poradie sa môže zmeniť aj pri zmene datum_prijatia
+  return true;
 }
 
 // Konverzia MOCK_OBJ formát → API formát
@@ -1329,26 +1366,47 @@ function startPolling(){
     if(!API_TOKEN||!currentUser)return;
     try{
       const cb=Date.now();
+      // DELTA: bežný tick stiahne len riadky zmenené od posledného obnovenia.
+      // Úplný zoznam sa sťahuje pri prihlásení a potom každých 5 minút (poistka).
+      // Technik má malý zoznam (len svoje) a musí hneď vidieť odobratú/preradenú objednávku → vždy úplný.
+      const fullSync=(!_syncWM)||(cb-_lastFullSync>FULL_SYNC_MS)||currentUser?.rola==='technik';
       let url=`/api/objednavky?limit=10000&_cb=${cb}`;
+      if(!fullSync){
+        url+=`&zmenene_od=${encodeURIComponent(new Date(_syncWM-DELTA_OVERLAP_MS).toISOString())}`;
+      }
       if(currentUser?.rola==='technik'&&currentUser.technik_meno){
         url+=`&zdroj=${encodeURIComponent(currentUser.technik_meno)}`;
       }
       const rows=await api('GET',url);
-      if(_pendingPatches.size===0){
-        MOCK_OBJ=rows.map(apiToMock);
+      let changed=true;
+      if(fullSync){
+        if(_pendingPatches.size===0){
+          MOCK_OBJ=rows.map(apiToMock);
+        } else {
+          // Race guard: pre objednávky s prebiehajúcim PATCH-om zachovaj lokálnu
+          // verziu (server ešte nemusí vedieť o zmene). Ostatné prepíšeme z API.
+          MOCK_OBJ = rows.map(r=>{
+            if(_pendingPatches.has(r.id_obj)){
+              const localO = MOCK_OBJ.find(o=>o.id_obj===r.id_obj);
+              return localO || apiToMock(r);
+            }
+            return apiToMock(r);
+          });
+        }
+        _syncWM=0;_bumpWM(rows); // prázdny výsledok → _syncWM=0 → ďalší tick je znova úplný
+        _lastFullSync=cb;
       } else {
-        // Race guard: pre objednávky s prebiehajúcim PATCH-om zachovaj lokálnu
-        // verziu (server ešte nemusí vedieť o zmene). Ostatné prepíšeme z API
-        // ako doteraz. Po dokončení PATCH-u sa guard cez .finally() uvoľní.
-        MOCK_OBJ = rows.map(r=>{
-          if(_pendingPatches.has(r.id_obj)){
-            const localO = MOCK_OBJ.find(o=>o.id_obj===r.id_obj);
-            return localO || apiToMock(r);
-          }
-          return apiToMock(r);
+        // zahoď riadky, ktoré sa vlastne nezmenili (prekryv okna vracia aj staré)
+        const byId=new Map(MOCK_OBJ.map(o=>[o.id_obj,o]));
+        const real=rows.filter(r=>{
+          const o=byId.get(r.id_obj);
+          return !o||!r.zmeneny||o.zmeneny!==r.zmeneny;
         });
+        changed=_mergeDelta(real);
+        _bumpWM(rows);
       }
-      // Tiché obnovenie – bez prerušenia UI
+      // Tiché obnovenie – bez prerušenia UI. Pri prázdnom delte sa nič neprekresľuje.
+      if(changed){
       if(activeTab===1)renderObjTable();
       if(activeTab===2)showPlan();
       if(activeTab===3)showPrerezerv();
@@ -1365,6 +1423,7 @@ function startPolling(){
       const cfv=document.getElementById('cap-from')?.value||T;
       const ctv=document.getElementById('cap-to')?.value||dt(9);
       renderCapTbl(cfv,ctv);renderPrCapTbl(cfv,ctv);
+      }
       // Notifikácie každý 2. cyklus pre technika, každý cyklus pre ostatných
       const notifRows=await api('GET','/api/notifikacie');
       const pred=NOTIF.length;
@@ -1394,6 +1453,7 @@ async function loadObjednavky(){
     }
     const rows=await api('GET',url);
     MOCK_OBJ=rows.map(apiToMock);
+    _syncWM=0;_bumpWM(rows);_lastFullSync=Date.now(); // základ pre delta polling
     setStatus(`Načítaných ${MOCK_OBJ.length} objednávok`,'ok');
     return true;
   }catch(e){
