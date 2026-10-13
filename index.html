@@ -1256,7 +1256,9 @@ async function api(method, path, body=null){
     const r=await fetch(API_URL+path, opts);
     if(!r.ok){
       const e=await r.json().catch(()=>({}));
-      throw new Error(e.detail||`HTTP ${r.status}`);
+      // detail môže byť objekt (napr. lock 409 s vlastníkom) → pošli ho ako JSON, nie "[object Object]"
+      throw new Error(typeof e.detail==='string'&&e.detail ? e.detail
+        : e.detail ? `HTTP ${r.status} ${JSON.stringify(e)}` : `HTTP ${r.status}`);
     }
     return await r.json().catch(()=>({}));
   }catch(e){
@@ -1580,7 +1582,18 @@ function patchObj(id, payload, opts){
   // prehliadač orezal ako URL fragment (# a všetko za ním sa nikdy neodošle
   // na server) – bez tohto by PATCH tíško zlyhal 404 na akékoľvek ID so '#'.
   return api('PATCH', `/api/objednavky/${encodeURIComponent(_pid)}`, payload)
-    .catch(silent ? ()=>{} : e => toast('⚠ API chyba: '+e.message))
+    .catch(e => {
+      // Zmena sa NEULOŽILA, ale lokálna kópia je už upravená → vynúť úplnú synchroniáciu
+      // pri najbližšom ticku, aby sa lokálny stav vrátil na serverový (delta by ho nenašla).
+      _lastFullSync = 0;
+      if(/\b409\b/.test(e.message||'') && /locked/.test(e.message||'')){
+        let who='iný používateľ';
+        try{ const m=String(e.message).match(/\{.*\}/); if(m){ const d=JSON.parse(m[0]); who=d.detail?.owner?.meno||who; } }catch(_){}
+        toast(`🔒 Zmena sa neuložila – objednávku ${_pid} práve edituje ${who}`);
+      } else if(!silent){
+        toast('⚠ API chyba: '+e.message);
+      }
+    })
     .finally(() => {
       // Buffer 2s pred uvoľnením guardu: chráni pred in-flight polling GET
       // response, ktorý mohol byť spustený PRED alebo POČAS PATCH-u a doraziť AŽ PO
@@ -3785,7 +3798,7 @@ function zapisObjednavku(){
     _pendingPatches.add(idObj);
     const _pid = idObj;
     api('PATCH', `/api/objednavky/${encodeURIComponent(_pid)}`, apiData)
-      .catch(e => { toast('⚠ API chyba: '+e.message); setStatus('Chyba uloženia','err'); })
+      .catch(e => { _lastFullSync = 0; toast('⚠ API chyba: '+e.message); setStatus('Chyba uloženia','err'); })
       .finally(() => setTimeout(() => _pendingPatches.delete(_pid), 2000));
   } else {
     api('POST', '/api/objednavky', apiData)
