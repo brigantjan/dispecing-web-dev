@@ -1516,6 +1516,7 @@ async function loadTechniciDetail(){
         dovolenka_od:  r.dovolenka_od  || '',
         dovolenka_do:  r.dovolenka_do  || '',
         regiony:       r.regiony       || '',
+        prioritne_okresy: r.prioritne_okresy || '',
       };
     });
   }catch(e){ console.warn('Technici detail:', e.message); }
@@ -1548,6 +1549,7 @@ async function loadUsers(){
         technik_email_notify: u.technik_email_notify||0,
         stredisko:    u.stredisko||'zilina',
         regiony:      u.regiony||'',  // CSV ECV okresov, prázdne = obsluhuje všetky
+        prioritne_okresy: u.prioritne_okresy||'',  // CSV ECV okresov s prednosťou pri AI návrhu
       }));
       // Zachovaj showPass pre existujúce záznamy, doplň nové
       while(showPass.length<DEMO_USERS.length) showPass.push(false);
@@ -2935,8 +2937,55 @@ function technikObsluhujeOkres(meno, okres){
   const r = (td.regiony || '').trim();
   if(!r) return true;                             // prázdne = obsluhuje všetky okresy
   if(!okres) return true;                         // objednávka bez okresu – nefiltruj
+  if(technikMaPrioritnyOkres(meno, okres)) return true;  // prioritný okres = obsluhuje ho
   const set = new Set(r.split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
   return set.has(okres.toUpperCase());
+}
+
+// Prioritný okres (users.prioritne_okresy, CSV). Technik s prioritou pre okres objednávky
+// má pri AI návrhu PREDNOSŤ: kým má v daný deň voľnú kapacitu, ostatní technici
+// (hoci tiež obsluhujú okres a majú skills) sa nenavrhnú.
+function technikMaPrioritnyOkres(meno, okres){
+  if(!okres) return false;
+  const p = (TECHNICI_DETAIL[meno]?.prioritne_okresy || '').trim();
+  if(!p) return false;
+  return p.split(',').map(s => s.trim().toUpperCase()).includes(okres.toUpperCase());
+}
+
+// Vyber najlepšieho technika pre daný deň s prednosťou prioritných technikov okresu.
+// 1. kolo: len technici s prioritou pre okres, efektívna záťaž < limit.
+// 2. kolo: ostatní kandidáti (len ak sú všetci prioritní plní alebo žiadni nie sú).
+// Keď pre okres nemá prioritu nikto, správanie je identické s pôvodným (jedno kolo, všetci).
+// Vracia { technik, skore, tiebreak, prio } alebo null.
+function aiVyberNaDenSPrioritou(kandidati, den, limit, typ, balik, region, okres, sTiebreakom){
+  const vyber = (zoznam) => {
+    let best = null;
+    for(const meno of zoznam){
+      const tim = (TECHNICI_DETAIL[meno]?.tim_velkost) || 1;
+      const eff = aiPocetObjPreDen(meno, den) / tim;
+      if(eff >= limit) continue;
+      const skore = aiSkorTechnika(meno, den, typ, balik, region);
+      if(sTiebreakom){
+        const tiebreak = aiPocetObjZaTydzen(meno, den, AI_CONFIG.WEEK_LOOKBACK) / tim;
+        if(!best || skore < best.skore - 0.001 ||
+           (Math.abs(skore-best.skore) < 0.001 && tiebreak < best.tiebreak)){
+          best = { technik: meno, skore, tiebreak };
+        }
+      } else if(!best || skore < best.skore){
+        best = { technik: meno, skore };
+      }
+    }
+    return best;
+  };
+  const prio = okres ? kandidati.filter(m => technikMaPrioritnyOkres(m, okres)) : [];
+  if(prio.length){
+    const b = vyber(prio);
+    if(b) return { ...b, prio: 'prio' };
+    const ostatni = kandidati.filter(m => !prio.includes(m));
+    const b2 = vyber(ostatni);
+    return b2 ? { ...b2, prio: 'fallback' } : null;   // prioritní sú plní → iný technik
+  }
+  return vyber(kandidati);
 }
 
 // Geografické regióny – iba okresy ktoré obsluhujeme (Žilina, PB, Kysuce).
@@ -3199,6 +3248,13 @@ function aiVyberKandidataForDate(typ, balik, adresa, dateIso, okres){
     return { technik: null, plan: dateIso, prekLT: false,
              dovod: ktosiSoSkills ? 'no-capacity-tzp' : 'no-skills-tzp' };
   }
+  // Prioritný okres: ak pre okres existuje prioritný technik, najprv prioritní pod SOFT_MAX,
+  // potom ostatní pod SOFT_MAX. Až keď sú všetci plní, pokračuje pôvodná logika (HARD_MAX).
+  if(okres && kand.some(m => technikMaPrioritnyOkres(m, okres))){
+    const bp = aiVyberNaDenSPrioritou(kand, dateIso, AI_CONFIG.SOFT_MAX, typ, balik, scoreRegion, okres, true);
+    if(bp) return { technik: bp.technik, plan: dateIso, prekLT: false, dovod: 'ok-tzp',
+                    skore: bp.skore.toFixed(2), region: scoreRegion, prio: bp.prio };
+  }
   // Vyberáme najlepšieho podľa skóre v rámci HARD_MAX (TzP smie ísť nad SOFT limity –
   // termín je dohodnutý so zákazníkom a posun nie je možnosť).
   let best = null;
@@ -3284,40 +3340,22 @@ function aiVyberKandidata(typ, balik, adresa, ltIso, isAdd, dnesIso, okres){
         }
       }
     }
-    // Bežný scoring: vyber kandidáta s minimálnym skóre, ktorého efektívna záťaž je pod limit
-    for(const meno of den_kand){
-      const td = TECHNICI_DETAIL[meno] || {};
-      const tim = td.tim_velkost || 1;
-      const raw = aiPocetObjPreDen(meno, den);
-      const eff = raw / tim;
-      // Limit: ADD môže do SOFT_MAX, obyčajné len do SOFT_TARGET
-      const limit = isAdd ? AI_CONFIG.SOFT_MAX : AI_CONFIG.SOFT_TARGET;
-      if(eff >= limit) continue;  // tento technik je v ten deň plný
-      const skore = aiSkorTechnika(meno, den, typ, balik, region);
-      // Tie-breaker: pri rovnakom skóre vyhráva ten s menšou týždennou záťažou
-      const tiebreak = aiPocetObjZaTydzen(meno, den, AI_CONFIG.WEEK_LOOKBACK) / tim;
-      if(!best || skore < best.skore - 0.001 || (Math.abs(skore-best.skore)<0.001 && tiebreak < best.tiebreak)){
-        best = { technik: meno, plan: den, skore, tiebreak };
-      }
-    }
+    // Bežný scoring: vyber kandidáta s minimálnym skóre, ktorého efektívna záťaž je pod limit.
+    // Limit: ADD môže do SOFT_MAX, obyčajné len do SOFT_TARGET. Tie-breaker: menšia týždenná záťaž.
+    // Prednosť majú technici s prioritným okresom (aiVyberNaDenSPrioritou).
+    const limit = isAdd ? AI_CONFIG.SOFT_MAX : AI_CONFIG.SOFT_TARGET;
+    const b = aiVyberNaDenSPrioritou(den_kand, den, limit, typ, balik, region, okres, true);
+    if(b) best = { technik: b.technik, plan: den, skore: b.skore, tiebreak: b.tiebreak, prio: b.prio };
     if(best) return { technik: best.technik, plan: best.plan, prekLT: false, dovod: 'ok',
-                      skore: best.skore.toFixed(2), region };
+                      skore: best.skore.toFixed(2), region, prio: best.prio };
   }
   // Nikto pod limitom – posuňme limit na HARD_MAX a skúsme znova (najmä pre ADD blízko LT)
   for(const den of dni){
     const den_kand = aiKvalifikovaniTechnici(typ, balik, den, okres);
-    for(const meno of den_kand){
-      const td = TECHNICI_DETAIL[meno] || {};
-      const tim = td.tim_velkost || 1;
-      const eff = aiPocetObjPreDen(meno, den) / tim;
-      if(eff >= AI_CONFIG.HARD_MAX) continue;
-      const skore = aiSkorTechnika(meno, den, typ, balik, region);
-      if(!best || skore < (best?.skore ?? Infinity)){
-        best = { technik: meno, plan: den, skore };
-      }
-    }
+    const b = aiVyberNaDenSPrioritou(den_kand, den, AI_CONFIG.HARD_MAX, typ, balik, region, okres, false);
+    if(b) best = { technik: b.technik, plan: den, skore: b.skore, prio: b.prio };
     if(best) return { technik: best.technik, plan: best.plan, prekLT: prekLTHint, dovod: 'ok-overload',
-                      skore: best.skore.toFixed(2), region };
+                      skore: best.skore.toFixed(2), region, prio: best.prio };
   }
   // Posledný fallback – ADD kde nestíha LT (po-LT plán, pre-rezervácia)
   if(isAdd && ltIso){
@@ -3602,7 +3640,9 @@ function aiTrigger(){
   // Render hint podľa dôvodu rozhodnutia
   hint.style.display='block';
   const planFmt = fmtD(result.plan);
-  const regionLbl = result.region && result.region!=='INE' ? ` · región: <strong>${result.region}</strong>` : '';
+  const regionLbl = (result.region && result.region!=='INE' ? ` · región: <strong>${result.region}</strong>` : '')
+    + (result.prio==='prio'     ? ` · <span title="Technik má tento okres nastavený ako prioritný">⭐ prioritný pre ${okresVal}</span>` : '')
+    + (result.prio==='fallback' ? ` · <span style="color:#b45309" title="Prioritní technici okresu majú v tento deň plnú kapacitu">⭐ prioritní pre ${okresVal} sú plní</span>` : '');
 
   // Okres nezistený (adresa nie je v zozname obcí a pole Okres je prázdne) ->
   // filter regiónov technika sa NEUPLATNÍ. Povedz to dispečerovi nahlas.
@@ -5139,6 +5179,35 @@ function _renderRegionyCheckboxes(idx){
   }).join('');
 }
 
+// Render checkboxov PRIORITNÝCH okresov technika (users.prioritne_okresy, CSV).
+function _renderPrioOkresyCheckboxes(idx){
+  const u = DEMO_USERS[idx];
+  const okresy = OKRES_BY_STREDISKO[u.stredisko || 'zilina'] || [];
+  if(okresy.length===0) return '';
+  const curSet = new Set((u.prioritne_okresy||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean));
+  return okresy.map(opt => {
+    const checked = curSet.has(opt);
+    return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:2px 6px;background:${checked?'#dcfce7':'#f3f4f6'};border:1px solid ${checked?'#16a34a':'#e5e7eb'};border-radius:4px;cursor:pointer;user-select:none;font-weight:${checked?'600':'400'}"><input type="checkbox" ${checked?'checked':''} onchange="togglePrioOkres(${idx},'${opt}',this.checked,this)" style="margin:0">${opt}</label>`;
+  }).join('');
+}
+
+// Prepne prioritný okres v users.prioritne_okresy (CSV, poradie podľa OKRES_BY_STREDISKO).
+function togglePrioOkres(idx, okres, checked, el){
+  if(idx>=DEMO_USERS.length) return;
+  const cur = new Set((DEMO_USERS[idx].prioritne_okresy||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean));
+  if(checked) cur.add(okres); else cur.delete(okres);
+  const order = OKRES_BY_STREDISKO[DEMO_USERS[idx].stredisko || 'zilina'] || [];
+  const csv = [...cur].sort((a,b) => order.indexOf(a) - order.indexOf(b)).join(',');
+  DEMO_USERS[idx].prioritne_okresy = csv;
+  updateUser(idx, 'prioritne_okresy', csv);
+  const lbl = el?.closest('label');
+  if(lbl){
+    lbl.style.background  = checked ? '#dcfce7' : '#f3f4f6';
+    lbl.style.borderColor = checked ? '#16a34a' : '#e5e7eb';
+    lbl.style.fontWeight  = checked ? '600' : '400';
+  }
+}
+
 // Prepne ECV okres v users.regiony (CSV). Prázdne = obsluhuje všetky okresy strediska.
 function toggleRegion(idx, okres, checked){
   if(idx>=DEMO_USERS.length) return;
@@ -5332,6 +5401,15 @@ function renderUserTable(){
           </div>
           <span style="font-size:10px;color:var(--muted);font-style:italic;white-space:nowrap" title="Prázdne = obsluhuje všetky okresy strediska">${(u.regiony||'').trim()?'':'(prázdne = všetky)'}</span>
         </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:6px 8px;background:${(u.prioritne_okresy||'').trim()?'#f0fdf4':'transparent'};border:1px solid ${(u.prioritne_okresy||'').trim()?'#86efac':'transparent'};border-radius:5px">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;user-select:none;white-space:nowrap;font-weight:${(u.prioritne_okresy||'').trim()?'600':'400'}" title="Prioritný okres: AI agent pre objednávky z tohto okresu navrhne najprv tohto technika (ak má skills). Iného technika ponúkne, až keď má prioritný technik v daný deň plnú kapacitu. Prioritný okres technik automaticky aj obsluhuje.">
+            ⭐ <span>Prioritný okres</span>
+          </label>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;flex:1">
+            ${_renderPrioOkresyCheckboxes(idx)}
+          </div>
+          <span style="font-size:10px;color:var(--muted);font-style:italic;white-space:nowrap">${(u.prioritne_okresy||'').trim()?'':'(žiadny)'}</span>
+        </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:6px 8px;background:${u.technik_email_notify?'#eff6ff':'transparent'};border:1px solid ${u.technik_email_notify?'#93c5fd':'transparent'};border-radius:5px">
           <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;white-space:nowrap;font-weight:${u.technik_email_notify?'600':'400'}">
             <input type="checkbox" ${u.technik_email_notify?'checked':''} onchange="updateUser(${idx},'technik_email_notify',this.checked?1:0);const _ei=document.getElementById('te-inp-${idx}');if(_ei)_ei.style.background=this.checked?'#fff':'#f9fafb';" style="margin:0">
@@ -5418,7 +5496,7 @@ function updateUser(idx,field,val){
     DEMO_USERS[idx][field]=s;
     payload[field]=s;
   }
-  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email','stredisko','regiony'].includes(field))
+  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email','stredisko','regiony','prioritne_okresy'].includes(field))
     payload[field]=val;
   else if(field==='technik_email_notify'){
     const iv=(val===1||val==='1'||val===true)?1:0;
@@ -5433,7 +5511,7 @@ function updateUser(idx,field,val){
     .then(async ()=>{
       // Synchronizuj TECHNICI_DETAIL (live mapa pre panel a AI agenta)
       // pri zmene skills/tim_velkost/dovolenka u technika, aby sa zmena prejavila bez F5
-      if(u.rola==='technik' && u.technik_meno && ['skills_typy','skills_baliky','tim_velkost','na_dovolenke','dovolenka_od','dovolenka_do','regiony'].includes(field)){
+      if(u.rola==='technik' && u.technik_meno && ['skills_typy','skills_baliky','tim_velkost','na_dovolenke','dovolenka_od','dovolenka_do','regiony','prioritne_okresy'].includes(field)){
         TECHNICI_DETAIL[u.technik_meno]={
           skills_typy:   DEMO_USERS[idx].skills_typy   || '',
           skills_baliky: DEMO_USERS[idx].skills_baliky || '',
@@ -5442,6 +5520,7 @@ function updateUser(idx,field,val){
           dovolenka_od:  DEMO_USERS[idx].dovolenka_od  || '',
           dovolenka_do:  DEMO_USERS[idx].dovolenka_do  || '',
           regiony:       DEMO_USERS[idx].regiony       || '',
+          prioritne_okresy: DEMO_USERS[idx].prioritne_okresy || '',
         };
         // Refresh kapacitného panelu ak je otvorený (zmena tim_velkost mení prahy farieb)
         if(field==='tim_velkost' && document.getElementById('cap-wrap')) refreshCap();
@@ -5464,7 +5543,7 @@ function pridajUsera(){
   const STREDISKO_SHORT={'zilina':'ZA','bratislava':'BA','trencin':'TN'};
   const short=STREDISKO_SHORT[stredisko]||stredisko.toUpperCase();
   const uid=Date.now().toString(36);
-  const novy={email:`novy_${uid}@suptel.sk`,heslo:'Heslo123!',meno:`Nový ${short}`,rola:'operátor',ini:'NP',technik_meno:'',imap_server:'posta.suptel.cz',imap_email:'',imap_heslo:'',skills_typy:'',skills_baliky:'',tim_velkost:1,na_dovolenke:0,dovolenka_od:'',dovolenka_do:'',stredisko,regiony:''};
+  const novy={email:`novy_${uid}@suptel.sk`,heslo:'Heslo123!',meno:`Nový ${short}`,rola:'operátor',ini:'NP',technik_meno:'',imap_server:'posta.suptel.cz',imap_email:'',imap_heslo:'',skills_typy:'',skills_baliky:'',tim_velkost:1,na_dovolenke:0,dovolenka_od:'',dovolenka_do:'',stredisko,regiony:'',prioritne_okresy:''};
   // Vytvor na API
   const rolaApiMap={'operátor':'operator','dispečér':'dispecer','admin':'admin','technik':'technik','vedenie':'vedenie'};
   api('POST','/api/users',{
