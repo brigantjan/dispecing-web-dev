@@ -1899,9 +1899,13 @@ function bulkPriraditTechnika(){
   }
   // Aplikuj zmenu lokálne aj na backend
   const ids=[...bulkSelected];
-  let changed=0;
+  let changed=0, preskocene=[];
   ids.forEach(id=>{
     const i=MOCK_OBJ.findIndex(o=>o.id_obj===id);
+    // Dovolenka: objednávku na deň dovolenky nového technika nepriraď (hotové/storno nevadia)
+    if(i>=0 && !MOCK_OBJ[i].real && MOCK_OBJ[i].farba!=='zlta' && technikMaDovolenkuVDen(novyTrim, MOCK_OBJ[i].plan)){
+      preskocene.push(id); return;
+    }
     if(i>=0){
       MOCK_OBJ[i].zdroj=novyTrim;
       MOCK_OBJ[i].zmeneny=now8();
@@ -1913,7 +1917,11 @@ function bulkPriraditTechnika(){
   bulkClear();
   renderObjTable();
   fillTechDatalist();
-  toast(`✓ Priradené ${changed} objednávok technikovi „${novyTrim}"`);
+  if(preskocene.length){
+    toast(`⛔ Technik ${novyTrim} má dovolenku – nepriradených ${preskocene.length}: ${preskocene.join(', ')}. Priradených ${changed}.`);
+  } else {
+    toast(`✓ Priradené ${changed} objednávok technikovi „${novyTrim}"`);
+  }
 }
 function bulkExportSelected(){
   if(!bulkSelected.size){toast('⚠ Žiadne objednávky označené');return;}
@@ -3041,6 +3049,18 @@ function aiTechnikDostupny(meno, planIso){
   return planIso > dod;
 }
 
+// DOVOLENKA – tvrdá kontrola pri zápise. Rovnaké pravidlo ako AI agent (aiTechnikDostupny):
+// na_dovolenke=1 a deň spadá do rozsahu od–do (prázdne 'do' = do odvolania, prázdne 'od' = hneď).
+// Neznámy technik (nie je v TECHNICI_DETAIL) sa neblokuje.
+function technikMaDovolenkuVDen(meno, iso){
+  if(!meno || !iso) return false;
+  if(!TECHNICI_DETAIL[meno]) return false;
+  return !aiTechnikDostupny(meno, iso);
+}
+function msgDovolenka(meno, iso){
+  return `⛔ Technik ${meno} má dovolenku – nie je možné mu plánovať objednávku na ${fmtD(iso)}.`;
+}
+
 // Kvalifikácia (typ ∈ skills_typy && balik ∈ skills_baliky)
 function aiTechnikMaSkills(meno, typ, balik){
   const td = TECHNICI_DETAIL[meno];
@@ -3596,7 +3616,8 @@ function aiTrigger(){
   // Ak agent vráti null (konflikt), n-technik vyčistíme – aj keby sme tam mali zostatok z drafta.
   const techEl = document.getElementById('n-technik');
   if(result.technik){
-    if(!techEl.value) techEl.value = result.technik;
+    // Ručne zadaný technik zostáva – okrem prípadu, keď má v navrhnutý deň dovolenku.
+    if(!techEl.value || technikMaDovolenkuVDen(techEl.value.trim(), result.plan)) techEl.value = result.technik;
   } else {
     techEl.value = '';  // pri konflikte nikdy nenechaj zastaranú hodnotu
   }
@@ -3770,6 +3791,16 @@ function zapisObjednavku(){
   pendingDup=null;w.style.display='none';
   if(currentStavNova==='storno'&&!document.getElementById('n-pozn').value.trim()){toast('⚠ Storno vyžaduje dôvod v Poznámkach!');document.getElementById('n-pozn').focus();return;}
   const plan=document.getElementById('n-plan').value;
+  // Dovolenka: technikovi s dovolenkou v plánovaný deň nesmie ísť objednávka (okrem hotová/storno).
+  {
+    const _tech=document.getElementById('n-technik').value.trim();
+    if(currentStavNova!=='hotova' && currentStavNova!=='storno' && technikMaDovolenkuVDen(_tech, plan)){
+      toast(msgDovolenka(_tech, plan));
+      setStatus('Technik má dovolenku – objednávka nezapísaná','err');
+      document.getElementById('n-technik').focus();
+      return;
+    }
+  }
   const lt=document.getElementById('n-lt').value;
   const add_txt=document.getElementById('n-add').value.trim().toUpperCase();
   let farba=colorFromStav(currentStavNova);
@@ -4006,11 +4037,10 @@ function isVikendSviatok(iso){
 }
 // Vráti true ak je technik na dovolenke k danému dňu (iso = "YYYY-MM-DD").
 // Číta z TECHNICI_DETAIL (dostupné všetkým rolám, aktualizuje sa po uložení v záložke Dovolenky).
+// Jednotné pravidlo s AI agentom a kontrolou pri zápise (technikMaDovolenkuVDen):
+// "D" sa zobrazí presne vtedy, keď systém technikovi v ten deň nedovolí plánovať.
 function isTechnikNaDovolenke(technikMeno, iso){
-  const td=TECHNICI_DETAIL[technikMeno];
-  if(!td || !td.na_dovolenke) return false;
-  if(!td.dovolenka_od || !td.dovolenka_do) return false;
-  return iso>=td.dovolenka_od && iso<=td.dovolenka_do;
+  return technikMaDovolenkuVDen(technikMeno, iso);
 }
 // Helper: vráti veľkosť tímu pre daného technika.
 // Primárne z TECHNICI_DETAIL (dostupné pre všetky role – admin/dispečér/operátor).
@@ -4830,6 +4860,17 @@ function saveEdit(){
   const w=document.getElementById('e-warn');
   if(editStav==='storno'&&!document.getElementById('e-pozn').value.trim()){w.style.display='block';w.textContent='⚠ Storno vyžaduje dôvod v Poznámkach!';return;}
   const plan=document.getElementById('e-plan').value;
+  // Dovolenka: blokuj, ak sa technik alebo dátum mení a výsledný technik má v ten deň dovolenku.
+  // Úprava objednávky bez zmeny technika/dátumu (napr. poznámka) zostáva povolená.
+  {
+    const _tech=(document.getElementById('e-technik').value||'').trim();
+    const _zmena=(_tech!==(editOrigTechnik||'')) || ((plan||'')!==(editOrigPlan||''));
+    if(_zmena && editStav!=='hotova' && editStav!=='storno' && technikMaDovolenkuVDen(_tech, plan)){
+      w.style.display='block'; w.textContent=msgDovolenka(_tech, plan);
+      toast(msgDovolenka(_tech, plan));
+      return;
+    }
+  }
   const lt=document.getElementById('e-lt').value;
   const add_txt=document.getElementById('e-add').value.trim().toUpperCase();
   let farba=colorFromStav(editStav);
@@ -6036,7 +6077,8 @@ function otvorHromadnaZmena(){
   const vsetciTech=[...new Set([...(TECHNICI||[]),...fromUsers,...fromMockAll,...technikoviaDna])].sort();
   // Z technika = obmedzene; Na technika = všetci
   const optsZ =technikoviaDna.map(t=>`<option>${t}</option>`).join('');
-  const optsNa=vsetciTech    .map(t=>`<option>${t}</option>`).join('');
+  const optsNa=vsetciTech    .map(t=>technikMaDovolenkuVDen(t, datum)
+    ? `<option value="${t}" disabled>${t} (D – dovolenka)</option>` : `<option>${t}</option>`).join('');
   document.getElementById('hz-z').innerHTML='<option value="">– vyberte –</option>'+optsZ;
   document.getElementById('hz-na').innerHTML='<option value="">– vyberte –</option>'+optsNa;
   document.getElementById('hz-preview').textContent='';
@@ -6058,6 +6100,7 @@ function vykonatHromadnaZmena(){
   const datum=document.getElementById('p-datum').value;
   if(!z||!na){toast('⚠ Vyberte oboch technikov');return;}
   if(z===na){toast('⚠ Technikovia musia byť rôzni');return;}
+  if(technikMaDovolenkuVDen(na, datum)){toast(msgDovolenka(na, datum));return;}
   const dotknuteObjednavky=MOCK_OBJ.filter(o=>o.plan===datum&&o.zdroj===z&&!o.real&&o.farba!=='zlta');
   if(!dotknuteObjednavky.length){toast('⚠ Žiadne objednávky na preradenie');return;}
   // Lokálna zmena + API PATCH pre každú objednávku
