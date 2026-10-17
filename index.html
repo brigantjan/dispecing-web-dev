@@ -2698,13 +2698,20 @@ function mwfObecSkratka(obec){
   if(w.length<=1) return w[0]||'';
   return w.slice(0,-1).map(x=>x.charAt(0)+'.').join('')+w[w.length-1];
 }
-// Typ mailu podľa predmetu: 'stlp' (STLP_Obnova), 'porucha' (Diag_… / Pojdeto_…), '' = balíček.
-// Príklady: '/Diag_INT/', '/Diag_KU/', '/Diag_INT_Opakovana/', '/Pojdeto_vonkajsia_pripojka/', '/STLP_Obnova/'.
-// Kľúčové slovo musí začínať na začiatku predmetu alebo za ne-alfanumerickým znakom (napr. lomka).
+// Typ mailu podľa predmetu: 'stlp', 'porucha', alebo '' = balíček.
+// 1) 'STLP_Obnova' → stĺp.
+// 2) Kľúčové slová porúch (Diag_, Pojdeto_, Reklamacia_, Poziad_) → porucha.
+// 3) Inak porucha vtedy, keď predmet obsahuje ID poruchy CIN-…, IMN-… alebo MWF-…
+//    a ZÁROVEŇ neobsahuje ID objednávky balíčka v tvare '1-XXXXXXX' (napr. 1-DCLWPBG).
+//    Poistka: balíček s náhodným 'MWF-…' v predmete sa tak nikdy neoznačí ako porucha
+//    (inak by dispečérka nemohla objednávku zapísať – tlačidlo Zapíš sa pri poruche skrýva).
 function mwfTypMailu(subject){
   const s=String(subject||'');
   if(/(?:^|[^A-Za-z0-9])STLP_Obnova/i.test(s)) return 'stlp';
-  if(/(?:^|[^A-Za-z0-9])(?:Diag|Pojdeto)_/i.test(s)) return 'porucha';
+  if(/(?:^|[^A-Za-z0-9])(?:Diag|Pojdeto|Reklamacia|Poziad)_/i.test(s)) return 'porucha';
+  const maIdPoruchy  = /(?:^|[^A-Za-z0-9])(?:CIN|IMN|MWF)-\d+/i.test(s);
+  const maIdBalicka  = /(?:^|[^A-Za-z0-9])1-[A-Z0-9]{6,}/.test(s);
+  if(maIdPoruchy && !maIdBalicka) return 'porucha';
   return '';
 }
 // ID poruchy/stĺpu z predmetu: prvý výskyt CIN-…, IMN-… alebo MWF-… (napr. 'CIN-4605430', 'MWF-2097818').
