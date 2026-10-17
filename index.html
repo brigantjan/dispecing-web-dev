@@ -165,6 +165,9 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .mwf-item.dup{background:#fff8e1;border-color:#ffca28}
 .mwf-txt{flex:1;font-size:11px;font-family:var(--mono)}
 .mwf-dup-badge{font-size:10px;color:#e65100;background:#fff3e0;border-radius:3px;padding:1px 4px;border:1px solid #ffcc02}
+/* Porucha / stĺp z MWF (podľa predmetu mailu) – nepatrí do balíčkov */
+.mwf-item.porucha{background:#fee2e2;border-color:#dc2626}
+.mwf-porucha-badge{font-size:10px;font-weight:800;color:#fff;background:#dc2626;border-radius:3px;padding:1px 5px;white-space:nowrap}
 .manual-box{background:#f3f8ff;border:1px solid #bbdefb;border-radius:6px;padding:6px 8px;margin-bottom:6px}
 .manual-box label{font-size:11px;font-weight:700;color:var(--accent);display:block;margin-bottom:4px}
 .manual-box textarea{width:100%;border:1px solid var(--border2);border-radius:4px;padding:5px 7px;color:var(--text);height:48px;resize:none;font-family:var(--mono);font-size:11px;outline:none}
@@ -2695,6 +2698,20 @@ function mwfObecSkratka(obec){
   if(w.length<=1) return w[0]||'';
   return w.slice(0,-1).map(x=>x.charAt(0)+'.').join('')+w[w.length-1];
 }
+// Typ mailu podľa predmetu: 'stlp' (STLP_Obnova), 'porucha' (Diag_… / Pojdeto_…), '' = balíček.
+// Príklady: '/Diag_INT/', '/Diag_KU/', '/Diag_INT_Opakovana/', '/Pojdeto_vonkajsia_pripojka/', '/STLP_Obnova/'.
+// Kľúčové slovo musí začínať na začiatku predmetu alebo za ne-alfanumerickým znakom (napr. lomka).
+function mwfTypMailu(subject){
+  const s=String(subject||'');
+  if(/(?:^|[^A-Za-z0-9])STLP_Obnova/i.test(s)) return 'stlp';
+  if(/(?:^|[^A-Za-z0-9])(?:Diag|Pojdeto)_/i.test(s)) return 'porucha';
+  return '';
+}
+// ID poruchy/stĺpu z predmetu: prvý výskyt CIN-…, IMN-… alebo MWF-… (napr. 'CIN-4605430', 'MWF-2097818').
+function mwfIdPoruchy(subject){
+  const m=String(subject||'').match(/(?:^|[^A-Za-z0-9])((?:CIN|IMN|MWF)-\d+)/i);
+  return m ? m[1].toUpperCase() : '';
+}
 function renderMwfList(){
   const el=document.getElementById('mwf-list');
   if(!mwfQueue.length){el.innerHTML='<div style="font-size:11px;color:var(--muted)">Žiadne nové objednávky.</div>';return;}
@@ -2708,16 +2725,26 @@ function renderMwfList(){
     const txt=_e([loc,typBalik,it.id_objednavky,it.meno,it.datum_prijatia].filter(Boolean).join('  '));
     // Aktivačná objednávka (ADD) = celý riadok tučne, ostatné normálne
     const isAdd=String(it.add||'').trim().toUpperCase()==='A';
-    return`<div class="mwf-item${it._is_dup?' dup':''}">
+    // Porucha / stĺp (z predmetu mailu) – červený riadok s pokynom na vymazanie z balíčkov
+    const _typ=mwfTypMailu(it.subject);
+    const _porId=_typ?mwfIdPoruchy(it.subject):'';
+    const _porBadge=_typ
+      ? `<span class="mwf-porucha-badge" title="${_e(it.subject||'')}">${_typ==='stlp'?'STĹP':'PORUCHA'} – vymaž z balíčkov</span>`
+        + (_porId?`<span class="mwf-txt" style="flex:0 0 auto;font-weight:700;color:#b91c1c">${_e(_porId)}</span>`:'')
+      : '';
+    return`<div class="mwf-item${_typ?' porucha':(it._is_dup?' dup':'')}">
+      ${_porBadge}
       <span class="mwf-txt" style="font-weight:${isAdd?'700':'400'}">${txt}</span>
       ${it._is_dup?'<span class="mwf-dup-badge">duplikát</span>':''}
-      <button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})">Zapíš</button>
+      ${_typ?'':`<button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})">Zapíš</button>`}
       <button class="btn btn-red btn-xs" onclick="mwfVymaz(${idx})">Vymaž</button>
     </div>`;
   }).join('');
 }
 function updateMwfBadge(){const b=document.getElementById('mwf-badge');b.textContent=mwfQueue.length;b.classList.toggle('hidden',!mwfQueue.length);}
 function mwfZapis(idx){
+  // Porucha / stĺp sa do balíčkov nezapisuje (tlačidlo je skryté; toto je poistka)
+  if(mwfTypMailu(mwfQueue[idx]?.subject)){ toast('⚠ Porucha/stĺp sa nezapisuje – vymaž ju z balíčkov'); return; }
   mwfActiveItem=mwfQueue[idx];
   const it=mwfActiveItem;
   vymazatFormu();
