@@ -572,7 +572,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <span class="rp-title">Kapacita technikov</span>
           <input type="date" id="cap-from" style="border:1px solid var(--border2);border-radius:4px;padding:2px 6px;font-size:11px;background:#fff;outline:none;width:130px">
           <input type="date" id="cap-to" style="border:1px solid var(--border2);border-radius:4px;padding:2px 6px;font-size:11px;background:#fff;outline:none;width:130px">
-          <button class="btn btn-outline btn-xs" onclick="refreshCap()">↻</button>
+          <button class="btn btn-outline btn-xs" onclick="refreshCap();loadPoruchyKapacita(true).then(z=>{if(z)refreshCap();})" title="Obnoviť kapacitu (aj poruchy)">↻</button>
           <span class="rp-legend">≤4=zelená  5–9=oranž  ≥10=červená</span>
         </div>
         <div class="cap-wrap" id="cap-wrap"></div>
@@ -1424,6 +1424,7 @@ function startPolling(){
       }
       updateDash();renderRecent();
       updatePoLtBadge();updateDiagInfo();
+      loadPoruchyKapacita().then(z=>{ if(z && document.getElementById('cap-wrap')) refreshCap(); });
       // Kapacita - zachovaj užívateľský výber dátumov
       const cfv=document.getElementById('cap-from')?.value||T;
       const ctv=document.getElementById('cap-to')?.value||dt(9);
@@ -2194,6 +2195,8 @@ function doLogin(){
     if(user.rola==='admin'||user.rola==='vedenie') await loadUsers();
     initApp();
     startPolling();
+    // Poruchy do kapacity – na pozadí, po načítaní prekresli kapacitu (aplikáciu neblokuje)
+    loadPoruchyKapacita(true).then(z=>{ if(z && document.getElementById('cap-wrap')) refreshCap(); });
     // Skry loader – dáta sú načítané, UI je pripravené
     if(appLoader) appLoader.style.display='none';
     setStatus(`Prihlásený: ${user.meno} (${user.rola})`,'ok');
@@ -3108,19 +3111,69 @@ function aiTechnikMaSkills(meno, typ, balik){
 }
 
 // Počet nedokončených objednávok pridelených technikovi v daný plánovaný deň
+// ── PORUCHY V KAPACITE (z databázy Porúch cez /api/kapacita-poruchy, len čítanie) ──
+// Porucha zaťaží technika ako PORUCHA_VAHA balíčkov (odhad: 1 porucha ≈ 2 balíčky).
+// Porucha priradená na viac dní sa počíta v každom dni rozsahu (rovnako ako v Poruchách).
+const PORUCHA_VAHA = 2;
+let PORUCHY_KAP = {};      // { technik_meno: { 'YYYY-MM-DD': [ {externe_id, adresa, stav}, ... ] } }
+let _porKapAt = 0;         // čas posledného načítania (ms)
+const POR_KAP_TTL_MS = 5*60*1000;
+function porPocetPreDen(meno, iso){
+  const t = PORUCHY_KAP[meno];
+  return (t && t[iso]) ? t[iso].length : 0;
+}
+function porZoznamPreDen(meno, iso){
+  const t = PORUCHY_KAP[meno];
+  return (t && t[iso]) ? t[iso] : [];
+}
+// Načíta poruchy pre rozsah T-14 … T+60 dní. Vracia true, ak sa dáta zmenili.
+// Chyba/nedostupnosť Porúch NIKDY nezablokuje aplikáciu – kapacita sa zobrazí bez porúch.
+async function loadPoruchyKapacita(force){
+  if(!API_TOKEN || !currentUser || currentUser.rola==='technik') return false;
+  if(!force && Date.now()-_porKapAt < POR_KAP_TTL_MS) return false;
+  _porKapAt = Date.now();
+  try{
+    const base = iso2date(T);
+    const od = date2iso(new Date(base.getTime() - 14*86400000));
+    const az = date2iso(new Date(base.getTime() + 60*86400000));
+    const r = await api('GET', `/api/kapacita-poruchy?od=${od}&az=${az}`);
+    const m = {};
+    (r && r.riadky || []).forEach(x => {
+      if(!x.technik || !x.datum) return;
+      if(!m[x.technik]) m[x.technik] = {};
+      if(!m[x.technik][x.datum]) m[x.technik][x.datum] = [];
+      m[x.technik][x.datum].push({ externe_id: x.externe_id||'', adresa: x.adresa||'', stav: x.stav||'' });
+    });
+    const zmena = JSON.stringify(m) !== JSON.stringify(PORUCHY_KAP);
+    PORUCHY_KAP = m;
+    if(r && r.dostupne===false && r.chyba) console.warn('Poruchy v kapacite:', r.chyba);
+    return zmena;
+  }catch(e){ console.warn('Poruchy v kapacite:', e.message); return false; }
+}
+
+// Záťaž technika v daný deň = nedokončené balíčky + PORUCHA_VAHA × poruchy v ten deň
 function aiPocetObjPreDen(meno, planIso){
-  return MOCK_OBJ.filter(o => o.zdroj===meno && o.plan===planIso && !o.real).length;
+  return MOCK_OBJ.filter(o => o.zdroj===meno && o.plan===planIso && !o.real).length
+       + PORUCHA_VAHA * porPocetPreDen(meno, planIso);
 }
 
 // Záťaž za posledných N dní pred refDate (fair-share)
 function aiPocetObjZaTydzen(meno, refIso, dni){
   const ref = iso2date(refIso);
   const od = new Date(ref.getTime() - dni*86400000);
+  let por = 0;
+  const t = PORUCHY_KAP[meno];
+  if(t){
+    for(const iso in t){
+      const d = iso2date(iso);
+      if(d>=od && d<=ref) por += t[iso].length;
+    }
+  }
   return MOCK_OBJ.filter(o => {
     if(o.zdroj!==meno || !o.plan) return false;
     const d = iso2date(o.plan);
     return d>=od && d<=ref;
-  }).length;
+  }).length + PORUCHA_VAHA * por;
 }
 
 // Úspešná história: technik už úspešne realizoval typ+balik (bez storna)
@@ -4103,7 +4156,10 @@ function renderCapTbl(f,t){
     const td=TECHNICI_DETAIL[name];
     return td && td.na_dovolenke && td.dovolenka_do;
   });
-  const techs=Array.from(new Set([...techsWithOrders, ...techsOnVacation])).sort();
+  // + technici, ktorí majú v zobrazenom rozsahu poruchu (z databázy Porúch)
+  const techsWithPoruchy = Object.keys(PORUCHY_KAP).filter(name =>
+    Object.keys(PORUCHY_KAP[name]).some(iso => iso>=f && iso<=t));
+  const techs=Array.from(new Set([...techsWithOrders, ...techsOnVacation, ...techsWithPoruchy])).sort();
   if(!techs.length){wrap.innerHTML='<div style="padding:12px;color:var(--muted);font-size:11px">Žiadne dáta.</div>';return;}
   let h=`<table class="cap-tbl"><thead><tr><th>Technik</th>`;
   dates.forEach(d=>{
@@ -4122,18 +4178,25 @@ function renderCapTbl(f,t){
       const vs=isVikendSviatok(d);
       const a=grid[tc]&&grid[tc][d]?grid[tc][d]:[];const v=a.length;
       const naDov=isTechnikNaDovolenke(tc,d);
+      // Poruchy v ten deň (z databázy Porúch). Farba bunky počíta záťaž v + PORUCHA_VAHA×p.
+      const por=porZoznamPreDen(tc,d);const p=por.length;
+      const zat=v+PORUCHA_VAHA*p;
       // Prahy sa násobia tim_velkost (Weiss tim=5 → ≤20 zel, ≤45 oranž, >45 červ)
       const prahZ=4*tim, prahO=9*tim;
       const cls=naDov
         ? (vs?'wknd-col ':'')+'dovolenka'
-        : (vs?'wknd-col ':'')+( v===0?'c0':v<=prahZ?'c14':v<=prahO?'c59':'c10');
+        : (vs?'wknd-col ':'')+( zat===0?'c0':zat<=prahZ?'c14':zat<=prahO?'c59':'c10');
       // Tooltip: pri tíme dopočítaj priemer/technik
       let tip=naDov?'Technik je na dovolenke'+(a.length?`\n\n${v} obj. plánovaných na tento deň:\n${a.join('\n')}`:''):a.join('\n');
+      if(p){
+        const porTxt=por.map(x=>`🔧 ${x.externe_id||'porucha'} ${x.adresa||''}${x.stav&&x.stav!=='Otvorená'?' ('+x.stav+')':''}`.trim()).join('\n');
+        tip=(tip?tip+'\n':'')+`Poruchy (${p}):\n${porTxt}`;
+      }
       if(!naDov && tim>1 && v>0){
         const priemer=(v/tim).toFixed(1);
         tip=`${v} obj. v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
       }
-      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?'D':(v||'—')}</td>`;
+      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?'D':(p?`${v}<span style="color:#b91c1c;font-weight:700"> +🔧${p}</span>`:(v||'—'))}</td>`;
     });h+=`</tr>`;
   });
   h+=`</tbody></table>`;wrap.innerHTML=h;
