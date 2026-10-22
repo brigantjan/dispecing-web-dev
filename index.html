@@ -414,7 +414,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="sb-nav-item" id="snav7" onclick="switchTab(7)"><span class="icon">🤖</span>AI Analytics</div>
     <div class="sb-nav-item" id="snav8" onclick="switchTab(8)"><span class="icon">🏖️</span>Dovolenky</div>
   </div>
-  <div style="padding:4px 10px 4px;border-top:1px solid var(--border)">
+  <div id="dash-title-wrap" style="padding:4px 10px 4px;border-top:1px solid var(--border)">
     <div class="dash-title">Dashboard</div>
   </div>
   <div class="dash-section" id="dash-section"></div>
@@ -438,11 +438,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px">
       💾 Záloha
     </button>
-    <!-- Modul Poruchy (krok 2: test spojenia) – len používateľ so zapnutým modulom -->
-    <button id="poruchy-btn" onclick="testPoruchySpojenie()" title="Poruchy – test spojenia (bez druhého prihlásenia)"
-            style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px;align-items:center;gap:4px">
-      🔧 Poruchy – test
-    </button>
+    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v1.js (pred zvonček) -->
     <button class="notif-btn" onclick="toggleNotif()" id="notif-btn" title="Notifikácie">
       🔔<span class="notif-badge hidden" id="notif-badge">0</span>
     </button>
@@ -3172,52 +3168,15 @@ async function loadKapSkryti(){
   try{
     const me = await api('GET','/api/me');
     MOJE_MODULY = new Set(String((me && me.moduly) || 'balicky').split(',').map(x=>x.trim()).filter(Boolean));
-    const pb = document.getElementById('poruchy-btn');
-    if(pb) pb.style.display = MOJE_MODULY.has('poruchy') ? 'inline-flex' : 'none';
     const raw = me && me.kapacita_skryti;
     const arr = raw ? JSON.parse(raw) : [];
     KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
   }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
+  // Modul Poruchy (poruchy_modul_v1.js): prepínač Balíčky | Poruchy podľa users.moduly
+  try{ if(window.PoruchyModul) window.PoruchyModul.init(MOJE_MODULY); }
+  catch(e){ console.error('Modul Poruchy – init:', e); }
 }
-// ── MODUL PORUCHY – test spojenia (krok 2; v kroku 3 sa z toho stane prepínač Balíčky/Poruchy) ──
-const PORUCHY_API_URL = (() => {
-  const h = window.location.hostname + window.location.pathname;
-  return (h.includes('dispecing-web-dev') || h.includes('localhost') || h.includes('127.0.0.1'))
-    ? 'https://poruchy-api-dev.onrender.com' : 'https://poruchy-api.onrender.com';
-})();
-let PORUCHY_TOKEN = null;
-async function poruchyApi(path){
-  if(!PORUCHY_TOKEN){
-    const r = await api('POST','/api/poruchy/token');
-    PORUCHY_TOKEN = r.token;
-  }
-  const res = await fetch(PORUCHY_API_URL + path, {headers:{'Authorization':'Bearer '+PORUCHY_TOKEN}});
-  if(res.status===401){ PORUCHY_TOKEN = null; }
-  if(!res.ok){
-    let d=''; try{ d=(await res.json()).detail||''; }catch(_){}
-    throw new Error(`Poruchy HTTP ${res.status}${d?' – '+d:''}`);
-  }
-  return res.json();
-}
-async function testPoruchySpojenie(){
-  const btn = document.getElementById('poruchy-btn');
-  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; }
-  toast('🔧 Pripájam sa k Poruchám… (prvé spojenie môže trvať do 1 min.)');
-  try{
-    PORUCHY_TOKEN = null;
-    const me = await poruchyApi('/me');
-    const [dash, tech] = await Promise.all([poruchyApi('/dashboard'), poruchyApi('/technici')]);
-    const STR = {zilina:'Žilina', bratislava:'Bratislava', trencin:'Trenčín'};
-    const kde = me.vsetky ? 'všetky strediská (len čítanie)' : (STR[me.stredisko]||me.stredisko);
-    toast(`✅ Poruchy – spojenie OK · ${kde} · rola ${me.role} · otvorených ${dash.otvorene} · technikov ${tech.length}`);
-    setStatus(`Poruchy OK: ${kde}, otvorených ${dash.otvorene}, technikov ${tech.length}`,'ok');
-  }catch(e){
-    toast('❌ Poruchy – spojenie zlyhalo: '+e.message);
-    setStatus('Poruchy: '+e.message,'err');
-  }finally{
-    if(btn){ btn.disabled = false; btn.style.opacity = ''; }
-  }
-}
+// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v1.js
 
 async function toggleKapZobrazit(meno, zobrazit, el){
   const pred = new Set(KAP_SKRYTI);
@@ -5437,11 +5396,15 @@ function togglePrioOkres(idx, okres, checked, el){
 function _maModulU(u, modul){
   return String(u.moduly||'balicky').split(',').map(x=>x.trim()).includes(modul);
 }
-function toggleModul(idx, modul, zapnut){
+function toggleModul(idx, modul, zapnut, el){
   if(idx>=DEMO_USERS.length) return;
   const set = new Set(String(DEMO_USERS[idx].moduly||'balicky').split(',').map(x=>x.trim()).filter(Boolean));
   if(zapnut) set.add(modul); else set.delete(modul);
-  set.add('balicky');                       // Balíčky zatiaľ vždy (prepínač modulov príde v kroku 3)
+  if(!set.has('balicky') && !set.has('poruchy')){   // používateľ musí mať aspoň jeden modul
+    if(el) el.checked = true;
+    toast('⚠ Používateľ musí mať zapnutý aspoň jeden modul');
+    return;
+  }
   const csv = ['balicky','poruchy'].filter(m=>set.has(m)).join(',');
   DEMO_USERS[idx].moduly = csv;
   updateUser(idx, 'moduly', csv);
@@ -5572,8 +5535,11 @@ function renderUserTable(){
         <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:4px">
           <span class="role-badge role-${u.rola}">${u.rola}</span>
           📧 <strong>IMAP prístup k mailu</strong> – pre čítanie PDF objednávok
-          <label style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia)">
-            <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked)" style="margin:0"> 🔧 Modul Poruchy
+          <label style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'balicky')?'600':'400'}" title="Prístup k modulu Balíčky (zriaďovanie)">
+            <input type="checkbox" ${_maModulU(u,'balicky')?'checked':''} onchange="toggleModul(${idx},'balicky',this.checked,this)" style="margin:0"> 📦 Modul Balíčky
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:5px;margin-left:12px;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia)">
+            <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked,this)" style="margin:0"> 🔧 Modul Poruchy
           </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
@@ -5661,8 +5627,11 @@ function renderUserTable(){
         </div>
       </td>
     </tr>`:`<tr style="background:#f8f9fc"><td colspan="6" style="padding:2px 12px 5px;font-size:11px;color:var(--muted)"><span class="role-badge role-${u.rola}">${u.rola}</span>${u.rola==='vedenie'?`
-      <label style="display:inline-flex;align-items:center;gap:5px;margin-left:14px;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia). Vedenie má v Poruchách len čítanie, všetky strediská.">
-        <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked)" style="margin:0"> 🔧 Modul Poruchy
+      <label style="display:inline-flex;align-items:center;gap:5px;margin-left:14px;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'balicky')?'600':'400'}" title="Prístup k modulu Balíčky (zriaďovanie)">
+        <input type="checkbox" ${_maModulU(u,'balicky')?'checked':''} onchange="toggleModul(${idx},'balicky',this.checked,this)" style="margin:0"> 📦 Modul Balíčky
+      </label>
+      <label style="display:inline-flex;align-items:center;gap:5px;margin-left:12px;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia). Vedenie má v Poruchách len čítanie, všetky strediská.">
+        <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked,this)" style="margin:0"> 🔧 Modul Poruchy
       </label>`:''}</td></tr>`}
   `).join(`
     <tr><td colspan="6" style="padding:0;height:6px;background:linear-gradient(90deg,transparent,#6366f1 30%,#6366f1 70%,transparent);opacity:0.25"></td></tr>
@@ -7521,4 +7490,6 @@ function aiLogExportCsv(){
 }
 
 </script>
+<!-- Modul Poruchy (KROK 3) – samostatný súbor v rovnakom repozitári ako index.html -->
+<script src="poruchy_modul_v1.js"></script>
 </body></html>
