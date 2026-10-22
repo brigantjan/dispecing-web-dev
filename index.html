@@ -438,6 +438,11 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px">
       💾 Záloha
     </button>
+    <!-- Modul Poruchy (krok 2: test spojenia) – len používateľ so zapnutým modulom -->
+    <button id="poruchy-btn" onclick="testPoruchySpojenie()" title="Poruchy – test spojenia (bez druhého prihlásenia)"
+            style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px;align-items:center;gap:4px">
+      🔧 Poruchy – test
+    </button>
     <button class="notif-btn" onclick="toggleNotif()" id="notif-btn" title="Notifikácie">
       🔔<span class="notif-badge hidden" id="notif-badge">0</span>
     </button>
@@ -1557,6 +1562,7 @@ async function loadUsers(){
         stredisko:    u.stredisko||'zilina',
         regiony:      u.regiony||'',  // CSV ECV okresov, prázdne = obsluhuje všetky
         prioritne_okresy: u.prioritne_okresy||'',  // CSV ECV okresov s prednosťou pri AI návrhu
+        moduly:       u.moduly||'balicky',          // CSV modulov: balicky, poruchy
       }));
       // Zachovaj showPass pre existujúce záznamy, doplň nové
       while(showPass.length<DEMO_USERS.length) showPass.push(false);
@@ -3161,14 +3167,58 @@ async function loadPoruchyKapacita(force){
 // v zobrazenom rozsahu aspoň jeden balíček (označený 👁). Skrytie je len zobrazenie –
 // AI, výber technika ani Dovolenky sa tým nemenia.
 let KAP_SKRYTI = new Set();
+let MOJE_MODULY = new Set(['balicky']);
 async function loadKapSkryti(){
   try{
     const me = await api('GET','/api/me');
+    MOJE_MODULY = new Set(String((me && me.moduly) || 'balicky').split(',').map(x=>x.trim()).filter(Boolean));
+    const pb = document.getElementById('poruchy-btn');
+    if(pb) pb.style.display = MOJE_MODULY.has('poruchy') ? 'inline-flex' : 'none';
     const raw = me && me.kapacita_skryti;
     const arr = raw ? JSON.parse(raw) : [];
     KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
   }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
 }
+// ── MODUL PORUCHY – test spojenia (krok 2; v kroku 3 sa z toho stane prepínač Balíčky/Poruchy) ──
+const PORUCHY_API_URL = (() => {
+  const h = window.location.hostname + window.location.pathname;
+  return (h.includes('dispecing-web-dev') || h.includes('localhost') || h.includes('127.0.0.1'))
+    ? 'https://poruchy-api-dev.onrender.com' : 'https://poruchy-api.onrender.com';
+})();
+let PORUCHY_TOKEN = null;
+async function poruchyApi(path){
+  if(!PORUCHY_TOKEN){
+    const r = await api('POST','/api/poruchy/token');
+    PORUCHY_TOKEN = r.token;
+  }
+  const res = await fetch(PORUCHY_API_URL + path, {headers:{'Authorization':'Bearer '+PORUCHY_TOKEN}});
+  if(res.status===401){ PORUCHY_TOKEN = null; }
+  if(!res.ok){
+    let d=''; try{ d=(await res.json()).detail||''; }catch(_){}
+    throw new Error(`Poruchy HTTP ${res.status}${d?' – '+d:''}`);
+  }
+  return res.json();
+}
+async function testPoruchySpojenie(){
+  const btn = document.getElementById('poruchy-btn');
+  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; }
+  toast('🔧 Pripájam sa k Poruchám… (prvé spojenie môže trvať do 1 min.)');
+  try{
+    PORUCHY_TOKEN = null;
+    const me = await poruchyApi('/me');
+    const [dash, tech] = await Promise.all([poruchyApi('/dashboard'), poruchyApi('/technici')]);
+    const STR = {zilina:'Žilina', bratislava:'Bratislava', trencin:'Trenčín'};
+    const kde = me.vsetky ? 'všetky strediská (len čítanie)' : (STR[me.stredisko]||me.stredisko);
+    toast(`✅ Poruchy – spojenie OK · ${kde} · rola ${me.role} · otvorených ${dash.otvorene} · technikov ${tech.length}`);
+    setStatus(`Poruchy OK: ${kde}, otvorených ${dash.otvorene}, technikov ${tech.length}`,'ok');
+  }catch(e){
+    toast('❌ Poruchy – spojenie zlyhalo: '+e.message);
+    setStatus('Poruchy: '+e.message,'err');
+  }finally{
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; }
+  }
+}
+
 async function toggleKapZobrazit(meno, zobrazit, el){
   const pred = new Set(KAP_SKRYTI);
   if(zobrazit) KAP_SKRYTI.delete(meno); else KAP_SKRYTI.add(meno);
@@ -5383,6 +5433,20 @@ function togglePrioOkres(idx, okres, checked, el){
   }
 }
 
+// ── MODULY používateľa (users.moduly, CSV: balicky, poruchy) ──
+function _maModulU(u, modul){
+  return String(u.moduly||'balicky').split(',').map(x=>x.trim()).includes(modul);
+}
+function toggleModul(idx, modul, zapnut){
+  if(idx>=DEMO_USERS.length) return;
+  const set = new Set(String(DEMO_USERS[idx].moduly||'balicky').split(',').map(x=>x.trim()).filter(Boolean));
+  if(zapnut) set.add(modul); else set.delete(modul);
+  set.add('balicky');                       // Balíčky zatiaľ vždy (prepínač modulov príde v kroku 3)
+  const csv = ['balicky','poruchy'].filter(m=>set.has(m)).join(',');
+  DEMO_USERS[idx].moduly = csv;
+  updateUser(idx, 'moduly', csv);
+}
+
 // Prepne ECV okres v users.regiony (CSV). Prázdne = obsluhuje všetky okresy strediska.
 function toggleRegion(idx, okres, checked){
   if(idx>=DEMO_USERS.length) return;
@@ -5508,6 +5572,9 @@ function renderUserTable(){
         <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:4px">
           <span class="role-badge role-${u.rola}">${u.rola}</span>
           📧 <strong>IMAP prístup k mailu</strong> – pre čítanie PDF objednávok
+          <label style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia)">
+            <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked)" style="margin:0"> 🔧 Modul Poruchy
+          </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
           <div class="field" style="margin:0"><label>IMAP Server</label>
@@ -5593,7 +5660,10 @@ function renderUserTable(){
           <input id="te-inp-${idx}" type="email" value="${u.technik_email||''}" onblur="updateUser(${idx},'technik_email',this.value)" placeholder="email technika..." style="flex:1;padding:4px 8px;border:1px solid var(--border2);border-radius:5px;font-size:12px;background:${u.technik_email_notify?'#fff':'#f9fafb'}">
         </div>
       </td>
-    </tr>`:`<tr style="background:#f8f9fc"><td colspan="6" style="padding:2px 12px 5px;font-size:11px;color:var(--muted)"><span class="role-badge role-${u.rola}">${u.rola}</span></td></tr>`}
+    </tr>`:`<tr style="background:#f8f9fc"><td colspan="6" style="padding:2px 12px 5px;font-size:11px;color:var(--muted)"><span class="role-badge role-${u.rola}">${u.rola}</span>${u.rola==='vedenie'?`
+      <label style="display:inline-flex;align-items:center;gap:5px;margin-left:14px;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia). Vedenie má v Poruchách len čítanie, všetky strediská.">
+        <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked)" style="margin:0"> 🔧 Modul Poruchy
+      </label>`:''}</td></tr>`}
   `).join(`
     <tr><td colspan="6" style="padding:0;height:6px;background:linear-gradient(90deg,transparent,#6366f1 30%,#6366f1 70%,transparent);opacity:0.25"></td></tr>
     <tr><td colspan="6" style="padding:0;height:2px"></td></tr>
@@ -5671,7 +5741,7 @@ function updateUser(idx,field,val){
     DEMO_USERS[idx][field]=s;
     payload[field]=s;
   }
-  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email','stredisko','regiony','prioritne_okresy'].includes(field))
+  else if(['meno','email','technik_meno','ini','imap_server','imap_email','imap_heslo','skills_typy','skills_baliky','technik_email','stredisko','regiony','prioritne_okresy','moduly'].includes(field))
     payload[field]=val;
   else if(field==='technik_email_notify'){
     const iv=(val===1||val==='1'||val===true)?1:0;
