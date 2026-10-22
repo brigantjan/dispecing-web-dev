@@ -1015,13 +1015,16 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <th style="width:150px">Dovolenka od</th>
           <th style="width:150px">Dovolenka do</th>
           <th style="width:90px">Akcia</th>
+          <th style="width:120px;text-align:center" title="Osobné nastavenie – platí len pre teba. Odškrtnutý technik sa v Kapacite technikov nezobrazí, kým nemá v zobrazenom období balíček.">V mojej kapacite</th>
         </tr></thead>
         <tbody id="dovolenky-tbody"></tbody>
       </table>
       <div style="font-size:11px;color:var(--muted);margin-top:10px">
         💡 Zaškrtnutím "Na dovolenke" a vyplnením rozsahu dátumov sa technik v tabuľke
         Kapacita technikov (záložka Nová objednávka) zobrazí ako <b style="color:#b71c1c">D</b>
-        (červenou) na príslušné dni – ale iba ak má v zobrazenom rozsahu aspoň jednu objednávku.
+        (červenou) na príslušné dni – ale iba ak má v zobrazenom rozsahu aspoň jednu objednávku.<br>
+        👁 Stĺpec <b>V mojej kapacite</b> je tvoje osobné nastavenie: odškrtnutý technik sa ti v Kapacite technikov
+        nezobrazí (ani s poruchou), kým nemá v zobrazenom období balíček – vtedy sa ukáže automaticky so značkou 👁.
       </div>
     </div>
   </div>
@@ -2197,6 +2200,8 @@ function doLogin(){
     startPolling();
     // Poruchy do kapacity – na pozadí, po načítaní prekresli kapacitu (aplikáciu neblokuje)
     loadPoruchyKapacita(true).then(z=>{ if(z && document.getElementById('cap-wrap')) refreshCap(); });
+    // Osobné nastavenie skrytých technikov v kapacite – na pozadí, potom prekresli
+    loadKapSkryti().then(()=>{ if(KAP_SKRYTI.size && document.getElementById('cap-wrap')) refreshCap(); });
     // Skry loader – dáta sú načítané, UI je pripravené
     if(appLoader) appLoader.style.display='none';
     setStatus(`Prihlásený: ${user.meno} (${user.rola})`,'ok');
@@ -3149,6 +3154,33 @@ async function loadPoruchyKapacita(force){
     if(r && r.dostupne===false && r.chyba) console.warn('Poruchy v kapacite:', r.chyba);
     return zmena;
   }catch(e){ console.warn('Poruchy v kapacite:', e.message); return false; }
+}
+
+// ── OSOBNÉ NASTAVENIE: technici skrytí v MOJEJ kapacite (users.kapacita_skryti) ──
+// Predvolene sa zobrazujú všetci. Skrytý technik sa v kapacite AUTOMATICKY zobrazí, ak má
+// v zobrazenom rozsahu aspoň jeden balíček (označený 👁). Skrytie je len zobrazenie –
+// AI, výber technika ani Dovolenky sa tým nemenia.
+let KAP_SKRYTI = new Set();
+async function loadKapSkryti(){
+  try{
+    const me = await api('GET','/api/me');
+    const raw = me && me.kapacita_skryti;
+    const arr = raw ? JSON.parse(raw) : [];
+    KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
+  }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
+}
+async function toggleKapZobrazit(meno, zobrazit, el){
+  const pred = new Set(KAP_SKRYTI);
+  if(zobrazit) KAP_SKRYTI.delete(meno); else KAP_SKRYTI.add(meno);
+  try{
+    await api('PATCH','/api/me/kapacita-skryti',{skryti:[...KAP_SKRYTI]});
+    toast(zobrazit ? `✓ ${meno} sa zobrazuje v kapacite` : `✓ ${meno} skrytý v kapacite`);
+    if(document.getElementById('cap-wrap')) refreshCap();
+  }catch(e){
+    KAP_SKRYTI = pred;                       // vráť späť, nič sa neuložilo
+    if(el) el.checked = !zobrazit;
+    toast('❌ Nastavenie sa neuložilo: '+e.message);
+  }
 }
 
 // Záťaž technika v daný deň = nedokončené balíčky + PORUCHA_VAHA × poruchy v ten deň
@@ -4159,7 +4191,10 @@ function renderCapTbl(f,t){
   // + technici, ktorí majú v zobrazenom rozsahu poruchu (z databázy Porúch)
   const techsWithPoruchy = Object.keys(PORUCHY_KAP).filter(name =>
     Object.keys(PORUCHY_KAP[name]).some(iso => iso>=f && iso<=t));
-  const techs=Array.from(new Set([...techsWithOrders, ...techsOnVacation, ...techsWithPoruchy])).sort();
+  // Osobné skrytie: skrytý technik sa ukáže len vtedy, ak má v rozsahu balíček (techsWithOrders)
+  const _sBalikom=new Set(techsWithOrders);
+  const techs=Array.from(new Set([...techsWithOrders, ...techsOnVacation, ...techsWithPoruchy]))
+    .filter(name=>!KAP_SKRYTI.has(name) || _sBalikom.has(name)).sort();
   if(!techs.length){wrap.innerHTML='<div style="padding:12px;color:var(--muted);font-size:11px">Žiadne dáta.</div>';return;}
   let h=`<table class="cap-tbl"><thead><tr><th>Technik</th>`;
   dates.forEach(d=>{
@@ -4173,7 +4208,8 @@ function renderCapTbl(f,t){
   techs.forEach(tc=>{
     const tim=getTimVelkost(tc);
     const suffix=tim>1?` <span style="font-size:9px;color:#d97706;font-weight:700;background:#fef3c7;padding:1px 4px;border-radius:3px" title="Vedúci tímu (${tim} technici)">×${tim}</span>`:'';
-    h+=`<tr><td class="tn">${tc}${suffix}</td>`;
+    const _skryty=KAP_SKRYTI.has(tc)?` <span style="font-size:10px;color:var(--muted)" title="V kapacite máš tohto technika skrytého (Dovolenky). Zobrazuje sa, lebo má v tomto období balíček.">👁</span>`:'';
+    h+=`<tr><td class="tn">${tc}${suffix}${_skryty}</td>`;
     dates.forEach(d=>{
       const vs=isVikendSviatok(d);
       const a=grid[tc]&&grid[tc][d]?grid[tc][d]:[];const v=a.length;
@@ -4246,19 +4282,19 @@ let DOVOLENKY_DATA = [];
 async function loadDovolenkyTab(){
   const tbody=document.getElementById('dovolenky-tbody');
   if(!tbody) return;
-  tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Načítavam...</td></tr>';
+  tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:14px">Načítavam...</td></tr>';
   try{
     DOVOLENKY_DATA = await api('GET','/api/technici/dovolenky') || [];
     renderDovolenkyTable();
   }catch(e){
-    tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:#c62828;padding:14px">Chyba načítania: ${e.message}</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:#c62828;padding:14px">Chyba načítania: ${e.message}</td></tr>`;
   }
 }
 function renderDovolenkyTable(){
   const tbody=document.getElementById('dovolenky-tbody');
   if(!tbody) return;
   if(!DOVOLENKY_DATA.length){
-    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Žiadni aktívni technici.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:14px">Žiadni aktívni technici.</td></tr>';
     return;
   }
   tbody.innerHTML = DOVOLENKY_DATA.map(t=>{
@@ -4271,6 +4307,7 @@ function renderDovolenkyTable(){
       <td><input type="date" id="dv-od-${t.id}" value="${od}"></td>
       <td><input type="date" id="dv-do-${t.id}" value="${doD}"></td>
       <td><button class="btn btn-primary btn-xs" onclick="saveDovolenka(${t.id})">💾 Uložiť</button></td>
+      <td style="text-align:center"><input type="checkbox" ${KAP_SKRYTI.has(t.technik_meno)?'':'checked'} data-meno="${String(t.technik_meno||'').replace(/"/g,'&quot;')}" onchange="toggleKapZobrazit(this.dataset.meno,this.checked,this)" style="width:16px;height:16px;cursor:pointer" title="Zobrazovať v mojej kapacite technikov"></td>
     </tr>`;
   }).join('');
 }
