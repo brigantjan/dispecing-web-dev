@@ -438,7 +438,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px">
       💾 Záloha
     </button>
-    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v4.js (pred zvonček) -->
+    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v5.js (pred zvonček) -->
     <button class="notif-btn" onclick="toggleNotif()" id="notif-btn" title="Notifikácie">
       🔔<span class="notif-badge hidden" id="notif-badge">0</span>
     </button>
@@ -3136,7 +3136,7 @@ function porZoznamPreDen(meno, iso){
 }
 // Načíta poruchy pre rozsah T-14 … T+60 dní. Vracia true, ak sa dáta zmenili.
 // Chyba/nedostupnosť Porúch NIKDY nezablokuje aplikáciu – kapacita sa zobrazí bez porúch.
-async function loadPoruchyKapacita(force){
+async function loadPoruchyKapacita(force, cerstve){   // cerstve=true → backend obíde 60 s cache (po uložení poruchy)
   if(!API_TOKEN || !currentUser || currentUser.rola==='technik') return false;
   if(!force && Date.now()-_porKapAt < POR_KAP_TTL_MS) return false;
   _porKapAt = Date.now();
@@ -3144,7 +3144,7 @@ async function loadPoruchyKapacita(force){
     const base = iso2date(T);
     const od = date2iso(new Date(base.getTime() - 14*86400000));
     const az = date2iso(new Date(base.getTime() + 60*86400000));
-    const r = await api('GET', `/api/kapacita-poruchy?od=${od}&az=${az}`);
+    const r = await api('GET', `/api/kapacita-poruchy?od=${od}&az=${az}${cerstve?'&cerstve=1':''}`);
     const m = {};
     (r && r.riadky || []).forEach(x => {
       if(!x.technik || !x.datum) return;
@@ -3173,11 +3173,11 @@ async function loadKapSkryti(){
     const arr = raw ? JSON.parse(raw) : [];
     KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
   }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
-  // Modul Poruchy (poruchy_modul_v4.js): prepínač Balíčky | Poruchy podľa users.moduly
+  // Modul Poruchy (poruchy_modul_v5.js): prepínač Balíčky | Poruchy podľa users.moduly
   try{ if(window.PoruchyModul) window.PoruchyModul.init(MOJE_MODULY); }
   catch(e){ console.error('Modul Poruchy – init:', e); }
 }
-// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v4.js
+// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v5.js
 
 async function toggleKapZobrazit(meno, zobrazit, el){
   const pred = new Set(KAP_SKRYTI);
@@ -7492,5 +7492,5 @@ function aiLogExportCsv(){
 
 </script>
 <!-- Modul Poruchy (KROK 3) – samostatný súbor v rovnakom repozitári ako index.html -->
-<script src="poruchy_modul_v4.js"></script>
+<script src="poruchy_modul_v5.js"></script>
 </body></html>
