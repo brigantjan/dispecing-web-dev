@@ -438,7 +438,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px">
       💾 Záloha
     </button>
-    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v3.js (pred zvonček) -->
+    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v4.js (pred zvonček) -->
     <button class="notif-btn" onclick="toggleNotif()" id="notif-btn" title="Notifikácie">
       🔔<span class="notif-badge hidden" id="notif-badge">0</span>
     </button>
@@ -3173,11 +3173,11 @@ async function loadKapSkryti(){
     const arr = raw ? JSON.parse(raw) : [];
     KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
   }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
-  // Modul Poruchy (poruchy_modul_v3.js): prepínač Balíčky | Poruchy podľa users.moduly
+  // Modul Poruchy (poruchy_modul_v4.js): prepínač Balíčky | Poruchy podľa users.moduly
   try{ if(window.PoruchyModul) window.PoruchyModul.init(MOJE_MODULY); }
   catch(e){ console.error('Modul Poruchy – init:', e); }
 }
-// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v3.js
+// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v4.js
 
 async function toggleKapZobrazit(meno, zobrazit, el){
   const pred = new Set(KAP_SKRYTI);
@@ -7492,5 +7492,5 @@ function aiLogExportCsv(){
 
 </script>
 <!-- Modul Poruchy (KROK 3) – samostatný súbor v rovnakom repozitári ako index.html -->
-<script src="poruchy_modul_v3.js"></script>
+<script src="poruchy_modul_v4.js"></script>
 </body></html>
