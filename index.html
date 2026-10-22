@@ -423,7 +423,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 <div class="main">
   <!-- TOPBAR -->
   <div class="topbar" style="position:relative">
-    <div class="topbar-title">DISPECING <span style="font-weight:300;font-size:12px;opacity:.8">· Zriaďovanie</span></div>
+    <div class="topbar-title">ZRIAĎOVANIE</div>
     <div class="topbar-file" id="topbar-file">SUPTEL</div>
     <!-- Diagnostika (admin/dispečér) – stav DB -->
     <div id="diag-info" style="font-size:11px;color:rgba(255,255,255,.85);font-family:var(--mono);padding:0 8px;display:none" title="Stav databázy"></div>
@@ -438,7 +438,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px">
       💾 Záloha
     </button>
-    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v6.js (pred zvonček) -->
+    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v7.js (pred zvonček) -->
     <button class="notif-btn" onclick="toggleNotif()" id="notif-btn" title="Notifikácie">
       🔔<span class="notif-badge hidden" id="notif-badge">0</span>
     </button>
@@ -478,7 +478,11 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <!-- MWF panel -->
       <div id="mwf-panel" style="padding:5px 8px">
         <div class="mwf-box">
-          <div class="mwf-hdr">Objednávky z mailu (Zapíš=predvyplniť | Vymaž=označiť prečítané)
+          <div class="mwf-hdr">Maily MWF (Zapíš=predvyplniť | Vymaž=prečítané)
+            <span id="mwf-filter" style="display:none;gap:8px;margin-left:6px;font-weight:600;color:var(--text)">
+              <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="mwf-f-bal" onchange="mwfFilterZmena()" style="margin:0">📦 Balíčky <span id="mwf-f-bal-n" style="color:var(--muted);font-weight:400"></span></label>
+              <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="mwf-f-por" onchange="mwfFilterZmena()" style="margin:0">🔧 Poruchy <span id="mwf-f-por-n" style="color:var(--muted);font-weight:400"></span></label>
+            </span>
             <button id="btn-zastupujem" class="btn btn-xs" style="margin-left:auto;display:none;background:#f3f4f6;border:1px solid var(--border2);color:var(--text)" onclick="zastupOpen()" title="Zastupujem kolegyňu – čítať aj jej maily"><span id="zastup-icon">🔀</span> <span id="zastup-label">Zastupujem</span></button><button class="btn btn-accent btn-xs" id="btn-mwf-load" onclick="mwfLoad()">↻ Načítať</button>
           </div>
           <div id="mwf-busy" class="busy-bar"><span class="spin-sm dark"></span><span id="mwf-busy-txt">Pracujem…</span></div>
@@ -2677,6 +2681,7 @@ async function _mwfLoadImpl(){
           termin_z_predaja: !!m.parsed?.termin_z_predaja,
           mail_uid:       m.mail_uid,
           subject:        m.subject,
+          porucha:        m.parsed?.porucha||null,   // v15: návrh poruchy z PDF (len pri poruche/stĺpe)
           _is_dup:        !!MOCK_OBJ.find(o=>o.id_obj===m.parsed?.id_obj),
           _no_parse:      !m.has_order,
         };
@@ -2730,39 +2735,80 @@ function mwfIdPoruchy(subject){
   const m=String(subject||'').match(/(?:^|[^A-Za-z0-9])((?:CIN|IMN|MWF)-\d+)/i);
   return m ? m[1].toUpperCase() : '';
 }
+// ── Filter zoznamu MWF: Balíčky / Poruchy (len kto má modul Poruchy) ──
+// V režime Balíčky je predvolene zaškrtnuté „Balíčky“, v režime Poruchy „Poruchy“; druhé si dispečerka môže pridať.
+const MWF_FILTER={ balicky:{bal:true,por:false}, poruchy:{bal:false,por:true} };
+function _mwfMaPoruchy(){ return !!(window.PoruchyModul && PoruchyModul.maPoruchy && PoruchyModul.maPoruchy()); }
+function _mwfMaBalicky(){ return !window.PoruchyModul || !PoruchyModul.maBalicky || PoruchyModul.maBalicky(); }
+function _mwfRezim(){ return (window.PoruchyModul && PoruchyModul.rezim==='poruchy') ? 'poruchy' : 'balicky'; }
+function mwfJeViditelny(it){
+  if(!_mwfMaPoruchy()) return true;                       // bez modulu Poruchy: všetko ako doteraz
+  const f=MWF_FILTER[_mwfRezim()];
+  return mwfTypMailu(it.subject) ? f.por : f.bal;
+}
+function mwfFilterZmena(){
+  const f=MWF_FILTER[_mwfRezim()];
+  f.bal=!!document.getElementById('mwf-f-bal')?.checked;
+  f.por=!!document.getElementById('mwf-f-por')?.checked;
+  renderMwfList(); updateMwfBadge();
+}
 function renderMwfList(){
   const el=document.getElementById('mwf-list');
+  // hlavička filtra
+  const fEl=document.getElementById('mwf-filter');
+  if(fEl){
+    const on=_mwfMaPoruchy();
+    fEl.style.display=on?'inline-flex':'none';
+    if(on){
+      const f=MWF_FILTER[_mwfRezim()];
+      const nPor=mwfQueue.filter(i=>mwfTypMailu(i.subject)).length, nBal=mwfQueue.length-nPor;
+      const cb=document.getElementById('mwf-f-bal'), cp=document.getElementById('mwf-f-por');
+      if(cb) cb.checked=f.bal; if(cp) cp.checked=f.por;
+      const nb=document.getElementById('mwf-f-bal-n'), np=document.getElementById('mwf-f-por-n');
+      if(nb) nb.textContent=nBal?`(${nBal})`:''; if(np) np.textContent=nPor?`(${nPor})`:'';
+    }
+  }
   if(!mwfQueue.length){el.innerHTML='<div style="font-size:11px;color:var(--muted)">Žiadne nové objednávky.</div>';return;}
   const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  el.innerHTML=mwfQueue.map((it,idx)=>{
+  const maPor=_mwfMaPoruchy(), maBal=_mwfMaBalicky();
+  let skryte=0;
+  const html=mwfQueue.map((it,idx)=>{
+    if(!mwfJeViditelny(it)){ skryte++; return ''; }
     // Poradie v riadku: OKRES Obec | TYP BALÍK | ID | meno | dátum prijatia
-    const _obec=mwfObecSkratka(((it.adresa||'').split(',')[0]||'').trim());
+    // pri poruche je obec z PDF samostatne (adresa poruchy môže byť 'Terchová 1564' bez čiarky)
+    const _obec=mwfObecSkratka((it.porucha&&it.porucha.obec)||((it.adresa||'').split(',')[0]||'').trim());
     const _okres=((it.region||'').trim()||detectOkres(it.adresa||'')).toUpperCase();
     const loc=[_okres,_obec].filter(Boolean).join(' ');
     const typBalik=[it.typ,it.balik].filter(Boolean).join(' ');
     const txt=_e([loc,typBalik,it.id_objednavky,it.meno,it.datum_prijatia].filter(Boolean).join('  '));
     // Aktivačná objednávka (ADD) = celý riadok tučne, ostatné normálne
     const isAdd=String(it.add||'').trim().toUpperCase()==='A';
-    // Porucha / stĺp (z predmetu mailu) – červený riadok s pokynom na vymazanie z balíčkov
+    // Porucha / stĺp (z predmetu mailu) – červený riadok. S modulom Poruchy sa dá zapísať do Porúch.
     const _typ=mwfTypMailu(it.subject);
     const _porId=_typ?mwfIdPoruchy(it.subject):'';
+    const _lbl=_typ==='stlp'?'STĹP':'PORUCHA';
     const _porBadge=_typ
-      ? `<span class="mwf-porucha-badge" title="${_e(it.subject||'')}">${_typ==='stlp'?'STĹP':'PORUCHA'} – vymaž z balíčkov</span>`
+      ? `<span class="mwf-porucha-badge" title="${_e(it.subject||'')}">${maPor?_lbl:_lbl+' – vymaž z balíčkov'}</span>`
         + (_porId?`<span class="mwf-txt" style="flex:0 0 auto;font-weight:700;color:#b91c1c">${_e(_porId)}</span>`:'')
       : '';
+    const zapis = _typ ? maPor : maBal;
     return`<div class="mwf-item${_typ?' porucha':(it._is_dup?' dup':'')}">
       ${_porBadge}
       <span class="mwf-txt" style="font-weight:${isAdd?'700':'400'}">${txt}</span>
       ${it._is_dup?'<span class="mwf-dup-badge">duplikát</span>':''}
-      ${_typ?'':`<button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})">Zapíš</button>`}
+      ${zapis?`<button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})" title="${_typ?'Predvyplniť formulár poruchy':'Predvyplniť formulár balíčka'}">Zapíš</button>`:''}
       <button class="btn btn-red btn-xs" onclick="mwfVymaz(${idx})">Vymaž</button>
     </div>`;
   }).join('');
+  el.innerHTML = html || `<div style="font-size:11px;color:var(--muted)">Žiadne maily pre zvolený filter${skryte?` (skrytých: ${skryte} – zaškrtni druhý typ)`:''}.</div>`;
 }
-function updateMwfBadge(){const b=document.getElementById('mwf-badge');b.textContent=mwfQueue.length;b.classList.toggle('hidden',!mwfQueue.length);}
+function updateMwfBadge(){const b=document.getElementById('mwf-badge');const n=mwfQueue.filter(mwfJeViditelny).length;b.textContent=n;b.classList.toggle('hidden',!n);}
 function mwfZapis(idx){
-  // Porucha / stĺp sa do balíčkov nezapisuje (tlačidlo je skryté; toto je poistka)
-  if(mwfTypMailu(mwfQueue[idx]?.subject)){ toast('⚠ Porucha/stĺp sa nezapisuje – vymaž ju z balíčkov'); return; }
+  // Porucha / stĺp → formulár poruchy v module Poruchy (v15); bez modulu sa do balíčkov nezapisuje
+  if(mwfTypMailu(mwfQueue[idx]?.subject)){
+    if(_mwfMaPoruchy()){ PoruchyModul.zapisZMwf(mwfQueue[idx]); return; }
+    toast('⚠ Porucha/stĺp sa nezapisuje – vymaž ju z balíčkov'); return;
+  }
   mwfActiveItem=mwfQueue[idx];
   const it=mwfActiveItem;
   vymazatFormu();
@@ -2813,6 +2859,13 @@ function mwfVymaz(idx){
   if(it.mail_uid) api('POST','/api/imap/mark-read',{mail_uid:it.mail_uid}).catch(()=>{});
   mwfQueue.splice(idx,1);renderMwfList();updateMwfBadge();
   setStatus('MWF: objednávka vymazaná','info');
+}
+// Porucha z mailu bola uložená v module Poruchy → mail preč zo zoznamu + označiť prečítaný (ako pri balíčku)
+function mwfAfterPoruchaOk(item){
+  const idx=mwfQueue.indexOf(item);
+  if(idx>=0) mwfQueue.splice(idx,1);
+  if(item && item.mail_uid) api('POST','/api/imap/mark-read',{mail_uid:item.mail_uid}).catch(()=>{});
+  renderMwfList(); updateMwfBadge();
 }
 function mwfAfterZapisOk(){
   if(!mwfActiveItem)return;
@@ -3173,11 +3226,11 @@ async function loadKapSkryti(){
     const arr = raw ? JSON.parse(raw) : [];
     KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
   }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
-  // Modul Poruchy (poruchy_modul_v6.js): prepínač Balíčky | Poruchy podľa users.moduly
+  // Modul Poruchy (poruchy_modul_v7.js): prepínač Balíčky | Poruchy podľa users.moduly
   try{ if(window.PoruchyModul) window.PoruchyModul.init(MOJE_MODULY); }
   catch(e){ console.error('Modul Poruchy – init:', e); }
 }
-// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v6.js
+// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v7.js
 
 async function toggleKapZobrazit(meno, zobrazit, el){
   const pred = new Set(KAP_SKRYTI);
@@ -7492,5 +7545,5 @@ function aiLogExportCsv(){
 
 </script>
 <!-- Modul Poruchy (KROK 3) – samostatný súbor v rovnakom repozitári ako index.html -->
-<script src="poruchy_modul_v6.js"></script>
+<script src="poruchy_modul_v7.js"></script>
 </body></html>
