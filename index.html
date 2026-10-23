@@ -438,7 +438,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             style="display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:.3px">
       💾 Záloha
     </button>
-    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v7.js (pred zvonček) -->
+    <!-- Prepínač Balíčky | Poruchy vkladá poruchy_modul_v8.js (pred zvonček) -->
     <button class="notif-btn" onclick="toggleNotif()" id="notif-btn" title="Notifikácie">
       🔔<span class="notif-badge hidden" id="notif-badge">0</span>
     </button>
@@ -877,6 +877,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
         <h2 style="font-size:16px;font-weight:700;color:var(--accent)">⚙️ Správa používateľov</h2>
         <button class="btn btn-green" onclick="pridajUsera()">+ Nový používateľ</button>
         <button class="btn btn-outline" onclick="showQR()">📱 QR kód pre mobilné testovanie</button>
+        <input type="search" id="user-hladat" placeholder="🔍 Hľadať meno, email, technika…" oninput="clearTimeout(window._uhT);window._uhT=setTimeout(renderUserTable,250)" style="border:1px solid var(--border2);border-radius:6px;padding:6px 10px;width:240px;background:#fff">
         <span style="font-size:11px;color:var(--muted)">Zmeny sa ukladajú okamžite (demo = len do pamäte)</span>
       </div>
       <table class="user-tbl" id="user-tbl">
@@ -2697,6 +2698,7 @@ async function _mwfLoadImpl(){
         break;
       }
     }
+    try{ if(window.PoruchyModul && PoruchyModul.oznacDuplicity) PoruchyModul.oznacDuplicity(mwfQueue); }catch(e){}
     if(!memStopped){
       const msg='IMAP: '+added+' nových'+(removed?' · '+removed+' prečítaných odstránených':'');
       setStatus(msg,'ok');
@@ -2795,7 +2797,7 @@ function renderMwfList(){
     return`<div class="mwf-item${_typ?' porucha':(it._is_dup?' dup':'')}">
       ${_porBadge}
       <span class="mwf-txt" style="font-weight:${isAdd?'700':'400'}">${txt}</span>
-      ${it._is_dup?'<span class="mwf-dup-badge">duplikát</span>':''}
+      ${it._is_dup?`<span class="mwf-dup-badge" title="${_typ?_e('Porucha s týmto ID už je v Poruchách'+(it._dup_stav?' (stav: '+it._dup_stav+')':'')+' – stačí Vymaž'):'Objednávka už je v databáze'}">duplikát${_typ&&it._dup_stav?' · '+_e(it._dup_stav):''}</span>`:''}
       ${zapis?`<button class="btn btn-green btn-xs" onclick="mwfZapis(${idx})" title="${_typ?'Predvyplniť formulár poruchy':'Predvyplniť formulár balíčka'}">Zapíš</button>`:''}
       <button class="btn btn-red btn-xs" onclick="mwfVymaz(${idx})">Vymaž</button>
     </div>`;
@@ -2855,6 +2857,7 @@ function mwfZapis(idx){
 function mwfVymaz(idx){
   const it=mwfQueue[idx];
   if(mwfActiveItem===it)mwfActiveItem=null;
+  try{ if(window.PoruchyModul && PoruchyModul.mwfVymazany) PoruchyModul.mwfVymazany(it); }catch(e){}
   // Označ mail ako prečítaný
   if(it.mail_uid) api('POST','/api/imap/mark-read',{mail_uid:it.mail_uid}).catch(()=>{});
   mwfQueue.splice(idx,1);renderMwfList();updateMwfBadge();
@@ -3201,6 +3204,9 @@ async function loadPoruchyKapacita(force, cerstve){   // cerstve=true → backen
     const m = {};
     (r && r.riadky || []).forEach(x => {
       if(!x.technik || !x.datum) return;
+      // v27: v kapacite (aj v AI) len poruchy, na ktorých sa ešte pracuje – Otvorená / Zaparkovaná.
+      // Zrealizovaná, Provizórna a Stornovaná technika už nevyťažujú.
+      if(x.stav && x.stav!=='Otvorená' && x.stav!=='Zaparkovaná') return;
       if(!m[x.technik]) m[x.technik] = {};
       if(!m[x.technik][x.datum]) m[x.technik][x.datum] = [];
       m[x.technik][x.datum].push({ externe_id: x.externe_id||'', adresa: x.adresa||'', stav: x.stav||'' });
@@ -3226,11 +3232,11 @@ async function loadKapSkryti(){
     const arr = raw ? JSON.parse(raw) : [];
     KAP_SKRYTI = new Set(Array.isArray(arr) ? arr : []);
   }catch(e){ console.warn('Nastavenie kapacity:', e.message); KAP_SKRYTI = new Set(); }
-  // Modul Poruchy (poruchy_modul_v7.js): prepínač Balíčky | Poruchy podľa users.moduly
+  // Modul Poruchy (poruchy_modul_v8.js): prepínač Balíčky | Poruchy podľa users.moduly
   try{ if(window.PoruchyModul) window.PoruchyModul.init(MOJE_MODULY); }
   catch(e){ console.error('Modul Poruchy – init:', e); }
 }
-// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v7.js
+// Modul Poruchy (token, volania backendu Porúch, prepínač) je v súbore poruchy_modul_v8.js
 
 async function toggleKapZobrazit(meno, zobrazit, el){
   const pred = new Set(KAP_SKRYTI);
@@ -5560,7 +5566,12 @@ function renderUserTable(){
   let dl=document.getElementById('dl-tech-uzers');
   if(!dl){ dl=document.createElement('datalist'); dl.id='dl-tech-uzers'; document.body.appendChild(dl); }
   dl.innerHTML=techSet.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">`).join('');
-  tbody.innerHTML=DEMO_USERS.map((u,idx)=>`
+  // v27: vyhľadávanie (bez diakritiky) + skupiny podľa roly. Indexy idx ostávajú pôvodné (DEMO_USERS).
+  const _bezDia=t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const _hl=_bezDia(document.getElementById('user-hladat')?.value||'').trim();
+  const _SKUPINY=[['admin','👑 Admini'],['vedenie','📊 Vedenie'],['dispečér','🎧 Dispečéri'],['operátor','🗂 Operátori'],['technik','🔧 Technici']];
+  const _vyber=DEMO_USERS.map((u,idx)=>({u,idx})).filter(({u})=>!_hl||_bezDia([u.meno,u.email,u.technik_meno,u.stredisko].join(' ')).includes(_hl));
+  const _rowHtml=(u,idx)=>`
     <tr>
       <td><input value="${u.meno}" onchange="updateUser(${idx},'meno',this.value)" style="min-width:150px"></td>
       <td><input value="${u.email}" onchange="updateUser(${idx},'email',this.value)" style="min-width:160px"></td>
@@ -5687,10 +5698,18 @@ function renderUserTable(){
       <label style="display:inline-flex;align-items:center;gap:5px;margin-left:12px;font-size:12px;cursor:pointer;color:var(--text);font-weight:${_maModulU(u,'poruchy')?'600':'400'}" title="Prístup k modulu Poruchy (bez druhého prihlásenia). Vedenie má v Poruchách len čítanie, všetky strediská.">
         <input type="checkbox" ${_maModulU(u,'poruchy')?'checked':''} onchange="toggleModul(${idx},'poruchy',this.checked,this)" style="margin:0"> 🔧 Modul Poruchy
       </label>`:''}</td></tr>`}
-  `).join(`
+  `+`
     <tr><td colspan="6" style="padding:0;height:6px;background:linear-gradient(90deg,transparent,#6366f1 30%,#6366f1 70%,transparent);opacity:0.25"></td></tr>
     <tr><td colspan="6" style="padding:0;height:2px"></td></tr>
-  `);
+  `;
+  const _znameRoly=new Set(_SKUPINY.map(x=>x[0]));
+  const _skup=[..._SKUPINY, ['__ine','Ostatní']];
+  tbody.innerHTML=_skup.map(([rola,nazov])=>{
+    const cl=_vyber.filter(({u})=>rola==='__ine'?!_znameRoly.has(u.rola):u.rola===rola);
+    if(!cl.length) return '';
+    return `<tr><td colspan="7" style="background:#eef2ff;color:var(--accent);font-weight:700;font-size:12px;padding:7px 12px;border-top:2px solid #c7d2fe">${nazov} <span style="color:var(--muted);font-weight:400">(${cl.length})</span></td></tr>`
+      + cl.map(({u,idx})=>_rowHtml(u,idx)).join('');
+  }).join('') || `<tr><td colspan="7" style="padding:14px;color:var(--muted)">Nikto nevyhovuje hľadaniu „${(document.getElementById('user-hladat')?.value||'').replace(/</g,'&lt;')}“.</td></tr>`;
   // Kolo B: po renderi dopĺň zoznamy sekundárnych IMAP účtov
   setTimeout(_imapAcctsForAllUsersAfterRender, 0);
 }
@@ -6279,6 +6298,8 @@ function autoBackupCheck(){
   // Počkať pár sekúnd po prihlásení aby sa MOCK_OBJ stihol naplniť
   setTimeout(()=>{
     if(!MOCK_OBJ.length) return;
+    // v27: kto má len modul Poruchy, nedostáva zálohu balíčkov (zálohu porúch robí modul Poruchy)
+    if(typeof MOJE_MODULY!=='undefined' && !MOJE_MODULY.has('balicky')) return;
     dailyBackupExport({silent:true})
       .then(ok=>{ if(ok) toast('💾 Denná záloha uložená do Stiahnuté'); })
       .catch(e=>console.warn('Auto-backup zlyhal:',e.message));
@@ -7545,5 +7566,5 @@ function aiLogExportCsv(){
 
 </script>
 <!-- Modul Poruchy (KROK 3) – samostatný súbor v rovnakom repozitári ako index.html -->
-<script src="poruchy_modul_v7.js"></script>
+<script src="poruchy_modul_v8.js"></script>
 </body></html>
