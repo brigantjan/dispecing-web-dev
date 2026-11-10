@@ -242,6 +242,32 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .cap-tbl td.wknd-col{background:rgba(239,68,68,.08)!important}
 /* ─── KAPACITA – dovolenka technika (bunka "D") ───────────── */
 .cap-tbl td.dovolenka{background:#ffebee!important;color:#b71c1c!important;font-weight:800!important}
+.cap-tbl td.dovolenka.pn{background:#f3e5f5!important;color:#6a1b9a!important}
+/* ─── v31: kalendár neprítomnosti (Dovolenky) ───────────── */
+.nep-tbl{border-collapse:collapse;background:#fff;user-select:none}
+.nep-tbl th,.nep-tbl td{border-bottom:1px solid var(--border);border-right:1px solid #eef0f4;text-align:center;height:28px}
+.nep-tbl th{background:#f0f4fa;color:var(--text2);font-weight:700;font-size:11px;padding:2px 0;width:29px;min-width:29px;position:sticky;top:0;z-index:1}
+.nep-tbl th span{display:block;font-weight:500;font-size:10px;color:var(--muted)}
+.nep-tbl .nep-t{text-align:left;padding:0 10px;min-width:160px;font-weight:600;white-space:nowrap;border-right:2px solid var(--border2);position:sticky;left:0;background:#fff;z-index:2}
+.nep-tbl th.nep-t{background:#f0f4fa;z-index:3}
+.nep-tbl td.nep-t{cursor:pointer}
+.nep-tbl td.nep-t:hover{color:var(--accent);text-decoration:underline}
+.nep-tbl td.nep-c{cursor:pointer;font-weight:800;font-size:11px;position:relative}
+.nep-tbl td.nep-c:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.nep-tbl .nep-we{background:#f1f3f6}
+.nep-tbl th.nep-we{background:#e5e9f0}
+.nep-tbl .nep-sv{background:#ffe8cc}
+.nep-tbl th.nep-sv{background:#ffd9a8;color:#9a3412}
+.nep-tbl th.nep-dnes{box-shadow:inset 0 -3px 0 var(--accent)}
+.nep-tbl td.nep-D{background:#ffcdd2;color:#b71c1c}
+.nep-tbl td.nep-PN{background:#e1bee7;color:#6a1b9a}
+.nep-tbl td.nep-dlh{background:repeating-linear-gradient(45deg,#ffebee,#ffebee 4px,#fff 4px,#fff 8px);color:#b71c1c;cursor:not-allowed}
+.nep-tbl td.nep-ob::after{content:'';position:absolute;right:3px;top:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.nep-tbl td.nep-sel{outline:3px solid #f59e0b!important;outline-offset:-3px}
+.nep-tbl .nep-sum{min-width:52px;font-weight:700;color:var(--text2);border-left:2px solid var(--border2)}
+#nep-rezimy .btn.nep-on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.nep-leg{display:inline-flex;align-items:center;gap:4px;margin-right:12px}
+.nep-sw{display:inline-block;width:20px;height:16px;border-radius:3px;border:1px solid var(--border2);text-align:center;font-size:10px;font-weight:800;line-height:14px}
 /* ─── SPRÁVA POUŽÍVATEĽOV ───────────────────────────────── */
 .user-tbl{width:100%;border-collapse:collapse;font-size:13px}
 .user-tbl th{background:#f0f4fa;color:var(--text2);padding:8px 12px;text-align:left;border-bottom:2px solid var(--border2);font-weight:700;white-space:nowrap}
@@ -1008,11 +1034,39 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
 
   <!-- ═══ TAB 8: DOVOLENKY TECHNIKOV (admin + dispečér) ═══ -->
   <div class="tab-page" id="page8" style="flex-direction:column;overflow:auto;padding:20px 24px;background:var(--bg)">
-    <div style="max-width:820px;width:100%">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-        <h2 style="font-size:16px;font-weight:700;color:var(--accent)">🏖️ Dovolenky technikov</h2>
+    <div style="width:100%">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <h2 style="font-size:16px;font-weight:700;color:var(--accent)">🏖️ Dovolenky a PN technikov</h2>
         <button class="btn btn-outline btn-xs" onclick="loadDovolenkyTab()">↻ Obnoviť</button>
-        <span style="font-size:11px;color:var(--muted)">Zmeny sa ukladajú okamžite po kliknutí na Uložiť pri danom technikovi.</span>
+        <span style="margin-left:10px;display:inline-flex;align-items:center;gap:6px">
+          <button class="btn btn-outline btn-xs" onclick="nepMesiacPosun(-1)" title="Predchádzajúci mesiac">‹</button>
+          <b id="nep-mes-lab" style="min-width:130px;text-align:center;font-size:14px"></b>
+          <button class="btn btn-outline btn-xs" onclick="nepMesiacPosun(1)" title="Ďalší mesiac">›</button>
+        </span>
+        <span id="nep-rezimy" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px">
+          <span style="font-size:12px;font-weight:600;color:var(--text2)">Klik zapisuje:</span>
+          <button class="btn btn-outline btn-xs" data-r="D" onclick="nepNastavRezim('D')">🏖️ Dovolenka</button>
+          <button class="btn btn-outline btn-xs" data-r="PN" onclick="nepNastavRezim('PN')">🤒 PN</button>
+          <button class="btn btn-outline btn-xs" data-r="X" onclick="nepNastavRezim('X')">🧽 Zmazať</button>
+        </span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">
+        <span class="nep-leg"><span class="nep-sw" style="background:#ffcdd2;color:#b71c1c">D</span>dovolenka</span>
+        <span class="nep-leg"><span class="nep-sw" style="background:#e1bee7;color:#6a1b9a">PN</span>PN</span>
+        <span class="nep-leg"><span class="nep-sw" style="background:repeating-linear-gradient(45deg,#ffebee,#ffebee 4px,#fff 4px,#fff 8px)"></span>od–do (tabuľka nižšie)</span>
+        <span class="nep-leg"><span class="nep-sw" style="background:#ffe8cc"></span>sviatok</span>
+        <span class="nep-leg"><span class="nep-sw" style="background:#f1f3f6"></span>víkend</span>
+        <span class="nep-leg"><span class="nep-sw" style="position:relative;background:#fff"><span style="position:absolute;right:2px;top:2px;width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></span>má naplánovanú prácu</span>
+      </div>
+      <div id="nep-kal" style="overflow:auto;max-width:100%;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:inline-block"></div>
+      <div style="font-size:11px;color:var(--muted);margin:8px 0 26px;line-height:1.55">
+        💡 Klik na deň zapíše alebo zruší neprítomnosť · ťahaním myšou označíš viac dní naraz · klik na meno technika označí celý mesiac (pracovné dni).<br>
+        Zmeny sa ukladajú hneď. Technik je v ten deň v Kapacite ako <b style="color:#b71c1c">D</b> / <b style="color:#6a1b9a">PN</b>, AI agent mu nič nenavrhne a nedá sa mu priradiť balíček ani porucha.
+      </div>
+    <div style="max-width:820px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        <h3 style="font-size:14px;font-weight:700;color:var(--accent)">📅 Dlhodobá neprítomnosť (od – do)</h3>
+        <span style="font-size:11px;color:var(--muted)">Napr. PN do odvolania. Ukladá sa tlačidlom Uložiť pri technikovi.</span>
       </div>
       <table class="user-tbl" id="dovolenky-tbl">
         <thead><tr>
@@ -1032,6 +1086,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
         👁 Stĺpec <b>V mojej kapacite</b> je tvoje osobné nastavenie: odškrtnutý technik sa ti v Kapacite technikov
         nezobrazí (ani s poruchou), kým nemá v zobrazenom období balíček – vtedy sa ukáže automaticky so značkou 👁.
       </div>
+    </div>
     </div>
   </div>
 
@@ -1534,6 +1589,183 @@ async function loadTechniciDetail(){
       };
     });
   }catch(e){ console.warn('Technici detail:', e.message); }
+}
+
+// ════════════════════════════════════════════════════════════
+// v31: NEPRÍTOMNOSŤ PO DŇOCH – kalendár dovoleniek / PN (backend v18, tabuľka nepritomnost)
+// NEPRITOMNOST = { technik_meno: { 'YYYY-MM-DD': 'D' | 'PN' } }
+// Platí všade, kde sa kontroluje dovolenka (aiTechnikDostupny → AI agent, kapacita,
+// kontrola pri zápise balíčka, priradenie poruchy v module Poruchy).
+// ════════════════════════════════════════════════════════════
+let NEPRITOMNOST = {};
+let _nepTimer = null;
+const NEP_DNI_SPAT = 120, NEP_DNI_DOPREDU = 430;
+async function loadNepritomnost(){
+  if(!API_TOKEN || !currentUser) return false;
+  try{
+    const base = iso2date(T);
+    const od = date2iso(new Date(base.getTime() - NEP_DNI_SPAT*86400000));
+    const doo = date2iso(new Date(base.getTime() + NEP_DNI_DOPREDU*86400000));
+    const rows = await api('GET', `/api/technici/nepritomnost?od=${od}&do=${doo}`) || [];
+    const m = {};
+    rows.forEach(r => { if(!r.technik_meno || !r.datum) return; (m[r.technik_meno] = m[r.technik_meno] || {})[String(r.datum).slice(0,10)] = r.typ; });
+    const zmena = JSON.stringify(m) !== JSON.stringify(NEPRITOMNOST);
+    NEPRITOMNOST = m;
+    // Obnova každých 5 min – zmeny od inej dispečérky sa prejavia bez F5
+    if(!_nepTimer) _nepTimer = setInterval(async () => {
+      if(await loadNepritomnost()){
+        if(document.getElementById('cap-wrap')) refreshCap();
+        if(document.getElementById('nep-kal') && !_nepDrag) renderNepKalendar();
+      }
+    }, 5*60*1000);
+    return zmena;
+  }catch(e){ console.warn('Neprítomnosť:', e.message); return false; }
+}
+// Typ neprítomnosti v deň: 'D' | 'PN' | '' (kalendár má prednosť pred rozsahom od–do)
+function nepTyp(meno, iso){
+  const t = NEPRITOMNOST[meno];
+  return (t && t[iso]) || '';
+}
+
+// ── Kalendár v záložke Dovolenky ────────────────────────────
+let NEP_MES = '';          // 'YYYY-MM'
+let NEP_REZIM = 'D';       // 'D' | 'PN' | 'X' (zmazať)
+let _nepDrag = null;       // { cells: Map(key → td) }
+const _NEP_DN = ['ne','po','ut','st','št','pi','so'];
+const _NEP_MESIACE = ['Január','Február','Marec','Apríl','Máj','Jún','Júl','August','September','Október','November','December'];
+
+function nepMesiacPosun(k){
+  let [y, m] = NEP_MES.split('-').map(Number);
+  m += k; if(m < 1){ m = 12; y--; } if(m > 12){ m = 1; y++; }
+  NEP_MES = `${y}-${String(m).padStart(2,'0')}`;
+  renderNepKalendar();
+}
+function nepNastavRezim(r){ NEP_REZIM = r; renderNepKalendar(); }
+
+// Naplánovaná práca technika v deň (nedokončené balíčky + poruchy načítané do kapacity)
+function nepPracaVDen(meno, iso){
+  const obj = MOCK_OBJ.filter(o => o.zdroj === meno && o.plan === iso && !o.real && o.farba !== 'zlta')
+    .map(o => `📦 ${o.id_obj} · ${o.adresa || ''}`.trim());
+  const por = (typeof porZoznamPreDen === 'function' ? porZoznamPreDen(meno, iso) : [])
+    .map(p => `🔧 ${p.externe_id || 'porucha'} · ${p.adresa || ''}`.trim());
+  return obj.concat(por);
+}
+// Dlhodobá neprítomnosť z rozsahu od–do (bez kalendára)
+function nepDlhodoba(meno, iso){
+  const td = TECHNICI_DETAIL[meno];
+  if(!td || !td.na_dovolenke) return false;
+  if(!td.dovolenka_od) return true;
+  if(iso < td.dovolenka_od) return false;
+  return !td.dovolenka_do || iso <= td.dovolenka_do;
+}
+
+function renderNepKalendar(){
+  const host = document.getElementById('nep-kal');
+  if(!host) return;
+  if(!NEP_MES) NEP_MES = T.slice(0, 7);
+  const [y, m] = NEP_MES.split('-').map(Number);
+  const pocet = new Date(y, m, 0).getDate();
+  const sv = sviatky(y);
+  const dni = [];
+  for(let d = 1; d <= pocet; d++){
+    const iso = `${NEP_MES}-${String(d).padStart(2,'0')}`;
+    const w = new Date(y, m-1, d).getDay();
+    dni.push({ d, iso, w, sv: sv.has(iso), we: w === 0 || w === 6 });
+  }
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const lab = document.getElementById('nep-mes-lab');
+  if(lab) lab.textContent = `${_NEP_MESIACE[m-1]} ${y}`;
+  document.querySelectorAll('#nep-rezimy .btn').forEach(b => b.classList.toggle('nep-on', b.dataset.r === NEP_REZIM));
+  const tech = (DOVOLENKY_DATA || []).filter(t => t.technik_meno)
+    .sort((a, b) => a.technik_meno.localeCompare(b.technik_meno, 'sk'));   // Č, Ď, Š v správnom poradí
+  if(!tech.length){ host.innerHTML = '<div style="padding:14px;color:var(--muted)">Žiadni aktívni technici.</div>'; return; }
+  let h = '<table class="nep-tbl"><thead><tr><th class="nep-t">Technik</th>';
+  dni.forEach(x => { h += `<th class="${x.sv ? 'nep-sv' : x.we ? 'nep-we' : ''}${x.iso === T ? ' nep-dnes' : ''}">${x.d}<span>${_NEP_DN[x.w]}</span></th>`; });
+  h += '<th class="nep-sum">Spolu</th></tr></thead><tbody>';
+  tech.forEach(t => {
+    const meno = t.technik_meno;
+    let n = 0;
+    h += `<tr><td class="nep-t" title="Klik = celý mesiac (pracovné dni)" onclick="nepCelyMesiac(${t.id})">${esc(meno)}</td>`;
+    dni.forEach(x => {
+      const typ = nepTyp(meno, x.iso);
+      const dlh = !typ && nepDlhodoba(meno, x.iso);
+      if((typ || dlh) && !x.we && !x.sv) n++;
+      const praca = !typ && !dlh && nepPracaVDen(meno, x.iso).length > 0;
+      const cls = ['nep-c', typ ? 'nep-' + typ : dlh ? 'nep-dlh' : x.sv ? 'nep-sv' : x.we ? 'nep-we' : '', praca ? 'nep-ob' : ''].join(' ');
+      const tip = dlh ? 'Dlhodobá neprítomnosť (od–do) – mení sa v tabuľke nižšie' : '';
+      h += `<td class="${cls}" data-uid="${t.id}" data-iso="${x.iso}"${tip ? ` title="${tip}"` : ''}>${typ || (dlh ? 'D' : '')}</td>`;
+    });
+    h += `<td class="nep-sum">${n ? n + ' d' : ''}</td></tr>`;
+  });
+  h += '</tbody></table>';
+  host.innerHTML = h;
+}
+
+// Ťahanie myšou: mousedown začne výber, mouseover pridáva, mouseup uloží
+function _nepCell(e){ const td = e.target.closest && e.target.closest('td.nep-c'); return td && !td.classList.contains('nep-dlh') ? td : null; }
+document.addEventListener('mousedown', e => {
+  const td = _nepCell(e); if(!td || e.button !== 0) return;
+  e.preventDefault();
+  _nepDrag = { cells: new Map() };
+  _nepDrag.cells.set(td.dataset.uid + '|' + td.dataset.iso, td); td.classList.add('nep-sel');
+});
+document.addEventListener('mouseover', e => {
+  if(!_nepDrag) return; const td = _nepCell(e); if(!td) return;
+  const k = td.dataset.uid + '|' + td.dataset.iso;
+  if(!_nepDrag.cells.has(k)){ _nepDrag.cells.set(k, td); td.classList.add('nep-sel'); }
+});
+document.addEventListener('mouseup', () => {
+  if(!_nepDrag) return;
+  const cells = [..._nepDrag.cells.values()]; _nepDrag = null;
+  const ciel = [];
+  cells.forEach(td => {
+    const uid = Number(td.dataset.uid), iso = td.dataset.iso;
+    const t = DOVOLENKY_DATA.find(x => x.id === uid); if(!t) return;
+    const teraz = nepTyp(t.technik_meno, iso);
+    // Jeden klik na deň s rovnakým typom = zrušenie (prepínač); ťahanie vždy nastaví zvolený režim
+    let novy = NEP_REZIM === 'X' ? '' : NEP_REZIM;
+    if(cells.length === 1 && teraz === novy) novy = '';
+    if(teraz !== novy) ciel.push({ uid, meno: t.technik_meno, iso, typ: novy, stary: teraz });
+  });
+  if(ciel.length) nepUlozZmeny(ciel); else renderNepKalendar();
+});
+function nepCelyMesiac(uid){
+  const t = DOVOLENKY_DATA.find(x => x.id === uid); if(!t) return;
+  const [y, m] = NEP_MES.split('-').map(Number);
+  const pocet = new Date(y, m, 0).getDate();
+  const dni = [];
+  for(let d = 1; d <= pocet; d++){ const iso = `${NEP_MES}-${String(d).padStart(2,'0')}`; if(!isVikendSviatok(iso)) dni.push(iso); }
+  const novy = NEP_REZIM === 'X' ? '' : NEP_REZIM;
+  // Ak má už celý mesiac zvolený typ → klik ho zruší
+  const vsetky = novy && dni.every(iso => nepTyp(t.technik_meno, iso) === novy);
+  const cielTyp = vsetky ? '' : novy;
+  const zoznam = cielTyp === '' ? Object.keys(NEPRITOMNOST[t.technik_meno] || {}).filter(iso => iso.startsWith(NEP_MES)) : dni;
+  const ciel = zoznam.map(iso => ({ uid, meno: t.technik_meno, iso, typ: cielTyp, stary: nepTyp(t.technik_meno, iso) }))
+    .filter(z => z.typ !== z.stary);
+  if(ciel.length) nepUlozZmeny(ciel);
+}
+
+async function nepUlozZmeny(ciel){
+  // Upozornenie: technik má v označené dni naplánovanú prácu
+  const konf = [];
+  ciel.filter(z => z.typ).forEach(z => nepPracaVDen(z.meno, z.iso).forEach(p => konf.push(`${z.meno} – ${fmtD(z.iso)}: ${p}`)));
+  if(konf.length){
+    const txt = konf.slice(0, 15).join('\n') + (konf.length > 15 ? `\n… a ďalšie (${konf.length - 15})` : '');
+    if(!confirm(`⚠ Technik má v označené dni naplánovanú prácu:\n\n${txt}\n\nZapísať neprítomnosť? Tieto objednávky a poruchy treba preplánovať.`)){ renderNepKalendar(); return; }
+  }
+  // Okamžite zobraz, potom ulož; pri chybe vráť späť
+  ciel.forEach(z => { const t = NEPRITOMNOST[z.meno] = NEPRITOMNOST[z.meno] || {}; if(z.typ) t[z.iso] = z.typ; else delete t[z.iso]; });
+  renderNepKalendar();
+  try{
+    await api('PUT', '/api/technici/nepritomnost', { zmeny: ciel.map(z => ({ user_id: z.uid, datum: z.iso, typ: z.typ })) });
+    const pridane = ciel.filter(z => z.typ).length, zmazane = ciel.length - pridane;
+    toast(`✅ Uložené${pridane ? ` · zapísané ${pridane} d` : ''}${zmazane ? ` · zrušené ${zmazane} d` : ''}`);
+    if(document.getElementById('cap-wrap')) refreshCap();
+  }catch(e){
+    ciel.forEach(z => { const t = NEPRITOMNOST[z.meno] = NEPRITOMNOST[z.meno] || {}; if(z.stary) t[z.iso] = z.stary; else delete t[z.iso]; });
+    renderNepKalendar();
+    toast('❌ Neuložené: ' + e.message, 5000);
+  }
 }
 
 // Načítaj users z API do DEMO_USERS (pre Správu použ.)
@@ -2204,6 +2436,7 @@ function doLogin(){
     document.getElementById('app-loader-text').textContent='Načítavam technikov…';
     await loadTechnici();
     await loadTechniciDetail();
+    await loadNepritomnost();          // v31: kalendár dovoleniek/PN po dňoch
     if(user.rola==='admin'||user.rola==='vedenie') await loadUsers();
     initApp();
     startPolling();
@@ -3145,6 +3378,7 @@ function aiMinPlanDate(nowHour){
 
 // Test, či je technik dostupný v daný plánovaný deň (zohľadňuje dovolenku/PN)
 function aiTechnikDostupny(meno, planIso){
+  if(nepTyp(meno, planIso)) return false;   // v31: deň v kalendári neprítomnosti (D / PN)
   const td = TECHNICI_DETAIL[meno];
   if(!td) return true;
   if(!td.na_dovolenke) return true;
@@ -3165,7 +3399,8 @@ function technikMaDovolenkuVDen(meno, iso){
   return !aiTechnikDostupny(meno, iso);
 }
 function msgDovolenka(meno, iso){
-  return `⛔ Technik ${meno} má dovolenku – nie je možné mu plánovať objednávku na ${fmtD(iso)}.`;
+  const _pn = nepTyp(meno, iso) === 'PN';
+  return `⛔ Technik ${meno} ${_pn ? 'je PN' : 'má dovolenku'} – nie je možné mu plánovať objednávku na ${fmtD(iso)}.`;
 }
 
 // Kvalifikácia (typ ∈ skills_typy && balik ∈ skills_baliky)
@@ -4679,6 +4914,10 @@ function renderCapTbl(f,t){
     const td=TECHNICI_DETAIL[name];
     return td && td.na_dovolenke && td.dovolenka_do;
   });
+  // v31: + technici s dňami v kalendári neprítomnosti v zobrazenom rozsahu
+  Object.keys(NEPRITOMNOST).forEach(name => {
+    if(TECHNICI_DETAIL[name] && Object.keys(NEPRITOMNOST[name]).some(iso => iso>=f && iso<=t) && !techsOnVacation.includes(name)) techsOnVacation.push(name);
+  });
   // + technici, ktorí majú v zobrazenom rozsahu poruchu (z databázy Porúch)
   const techsWithPoruchy = Object.keys(PORUCHY_KAP).filter(name =>
     Object.keys(PORUCHY_KAP[name]).some(iso => iso>=f && iso<=t));
@@ -4705,16 +4944,17 @@ function renderCapTbl(f,t){
       const vs=isVikendSviatok(d);
       const a=grid[tc]&&grid[tc][d]?grid[tc][d]:[];const v=a.length;
       const naDov=isTechnikNaDovolenke(tc,d);
+      const _pn=naDov && nepTyp(tc,d)==='PN';
       // Poruchy v ten deň (z databázy Porúch). Farba bunky počíta záťaž v + PORUCHA_VAHA×p.
       const por=porZoznamPreDen(tc,d);const p=por.length;
       const zat=v+PORUCHA_VAHA*p;
       // Prahy sa násobia tim_velkost (Weiss tim=5 → ≤20 zel, ≤45 oranž, >45 červ)
       const prahZ=4*tim, prahO=9*tim;
       const cls=naDov
-        ? (vs?'wknd-col ':'')+'dovolenka'
+        ? (vs?'wknd-col ':'')+'dovolenka'+(_pn?' pn':'')
         : (vs?'wknd-col ':'')+( zat===0?'c0':zat<=prahZ?'c14':zat<=prahO?'c59':'c10');
       // Tooltip: pri tíme dopočítaj priemer/technik
-      let tip=naDov?'Technik je na dovolenke'+(a.length?`\n\n${v} obj. plánovaných na tento deň:\n${a.join('\n')}`:''):a.join('\n');
+      let tip=naDov?(_pn?'Technik je PN':'Technik je na dovolenke')+(a.length?`\n\n${v} obj. plánovaných na tento deň:\n${a.join('\n')}`:''):a.join('\n');
       if(p){
         const porTxt=por.map(x=>`🔧 ${x.externe_id||'porucha'} ${x.adresa||''}${x.stav&&x.stav!=='Otvorená'?' ('+x.stav+')':''}`.trim()).join('\n');
         tip=(tip?tip+'\n':'')+`Poruchy (${p}):\n${porTxt}`;
@@ -4723,7 +4963,7 @@ function renderCapTbl(f,t){
         const priemer=(v/tim).toFixed(1);
         tip=`${v} obj. v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
       }
-      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?'D':(p?`${v}<span style="color:#b91c1c;font-weight:700"> +🔧${p}</span>`:(v||'—'))}</td>`;
+      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?(_pn?'PN':'D'):(p?`${v}<span style="color:#b91c1c;font-weight:700"> +🔧${p}</span>`:(v||'—'))}</td>`;
     });h+=`</tr>`;
   });
   h+=`</tbody></table>`;wrap.innerHTML=h;
@@ -4777,6 +5017,8 @@ async function loadDovolenkyTab(){
   try{
     DOVOLENKY_DATA = await api('GET','/api/technici/dovolenky') || [];
     renderDovolenkyTable();
+    renderNepKalendar();                       // v31: hneď z načítaných dát
+    if(await loadNepritomnost()) renderNepKalendar();   // a po obnovení z DB
   }catch(e){
     tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:#c62828;padding:14px">Chyba načítania: ${e.message}</td></tr>`;
   }
@@ -4826,6 +5068,7 @@ async function saveDovolenka(uid){
     }
     toast('✅ Dovolenka uložená');
     if(document.getElementById('cap-wrap')) refreshCap();
+    renderNepKalendar();
   }catch(e){
     toast('❌ Chyba: '+e.message);
   }
@@ -6768,7 +7011,7 @@ function otvorHromadnaZmena(){
   // Z technika = obmedzene; Na technika = všetci
   const optsZ =technikoviaDna.map(t=>`<option>${t}</option>`).join('');
   const optsNa=vsetciTech    .map(t=>technikMaDovolenkuVDen(t, datum)
-    ? `<option value="${t}" disabled>${t} (D – dovolenka)</option>` : `<option>${t}</option>`).join('');
+    ? `<option value="${t}" disabled>${t} (${nepTyp(t, datum)==='PN'?'PN':'D – dovolenka'})</option>` : `<option>${t}</option>`).join('');
   document.getElementById('hz-z').innerHTML='<option value="">– vyberte –</option>'+optsZ;
   document.getElementById('hz-na').innerHTML='<option value="">– vyberte –</option>'+optsNa;
   document.getElementById('hz-preview').textContent='';
