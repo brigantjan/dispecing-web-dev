@@ -1035,6 +1035,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <!-- ═══ TAB 8: DOVOLENKY TECHNIKOV (admin + dispečér) ═══ -->
   <div class="tab-page" id="page8" style="flex-direction:column;overflow:auto;padding:20px 24px;background:var(--bg)">
     <div style="width:100%">
+      <div id="nep-hlavicka" style="position:sticky;top:-20px;z-index:6;background:var(--bg);padding:20px 0 8px;margin-top:-20px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
         <h2 style="font-size:16px;font-weight:700;color:var(--accent)">🏖️ Dovolenky a PN technikov</h2>
         <button class="btn btn-outline btn-xs" onclick="loadDovolenkyTab()">↻ Obnoviť</button>
@@ -1058,7 +1059,9 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
         <span class="nep-leg"><span class="nep-sw" style="background:#f1f3f6"></span>víkend</span>
         <span class="nep-leg"><span class="nep-sw" style="position:relative;background:#fff"><span style="position:absolute;right:2px;top:2px;width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></span>má naplánovanú prácu</span>
       </div>
-      <div id="nep-kal" style="overflow:auto;max-width:100%;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:inline-block"></div>
+      </div>
+      <!-- Technici sa posúvajú vnútri kalendára; riadok s dňami a stĺpec s menami ostávajú ukotvené -->
+      <div id="nep-kal" style="overflow:auto;max-width:100%;max-height:calc(100vh - 230px);min-height:220px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:inline-block;vertical-align:top"></div>
       <div style="font-size:11px;color:var(--muted);margin:8px 0 26px;line-height:1.55">
         💡 Klik na deň zapíše alebo zruší neprítomnosť · ťahaním myšou označíš viac dní naraz · klik na meno technika označí celý mesiac (pracovné dni).<br>
         Zmeny sa ukladajú hneď. Technik je v ten deň v Kapacite ako <b style="color:#b71c1c">D</b> / <b style="color:#6a1b9a">PN</b>, AI agent mu nič nenavrhne a nedá sa mu priradiť balíček ani porucha.
