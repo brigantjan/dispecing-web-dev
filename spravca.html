@@ -164,7 +164,7 @@ async function api(method, path, body, envKey){
   const r = await fetch(ENV[e].api + path, opts);
   if(r.status === 401 && path !== '/api/login'){ delete tokeny[e]; ulozTok(); if(e === env) zobraz(); throw new Error('Prihlásenie vypršalo'); }
   const d = await r.json().catch(() => ({}));
-  if(!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : `HTTP ${r.status}`);
+  if(!r.ok){ const err = new Error(typeof d.detail === 'string' ? d.detail : `HTTP ${r.status}`); err.status = r.status; throw err; }
   return d;
 }
 
@@ -196,7 +196,8 @@ async function prihlas(){
     catch(e){
       try{ await api('POST', '/api/logout'); }catch(_){}
       delete tokeny[env]; ulozTok();
-      $('l-err').textContent = /404/.test(e.message) ? 'Tento backend ešte nemá Správu systému (treba v20).' : 'Prístup len pre správcu systému.';
+      $('l-err').textContent = e.status === 404 ? 'Tento backend ešte nemá Správu systému – najprv nasaď backend v20.'
+        : e.status === 403 ? `Účet ${email} nemá prístup – Správa je len pre správcu systému.` : ('Chyba: ' + e.message);
       return;
     }
     $('l-pass').value = ''; ulozTok(); zobraz();
