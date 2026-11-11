@@ -3151,6 +3151,14 @@ function parsePaste(){
 // STAV CHECKBOXY
 // ════════════════════════════════════════════════════════════
 let currentStavNova='';
+// v32b: Fiktív má zmysel len pri neukončenej objednávke – pri Hotová/Storno je políčko vypnuté a zablokované
+function _fikSync(pref, stav){
+  const f=document.getElementById(pref+'-fiktiv'); if(!f) return;
+  const zatv = stav==='hotova' || stav==='storno';
+  if(zatv){ if(!f.disabled) f.dataset.pred = f.checked ? '1' : ''; f.checked=false; f.disabled=true; }
+  else if(f.disabled){ f.disabled=false; f.checked = f.dataset.pred==='1'; }
+  const l=f.closest('label'); if(l){ l.style.opacity = zatv ? '.45' : ''; l.title = zatv ? 'Pri ukončenej/stornovanej objednávke sa Fiktív nepoužíva' : 'Plánovaný dátum je len fiktívny (orientačný)'; }
+}
 function stavToggle(el,stav){
   const same=el.className.includes('active');
   document.querySelectorAll('#n-stav-opts .stav-opt').forEach(o=>o.className='stav-opt');
@@ -3159,6 +3167,7 @@ function stavToggle(el,stav){
     if(stav==='storno')el.classList.add('active-s');
     if(stav==='prerezerv')el.classList.add('active-p');
   }else currentStavNova='';
+  _fikSync('n', currentStavNova);
 }
 let editStav='';
 function eStavToggle(el,stav){
@@ -3170,6 +3179,7 @@ function eStavToggle(el,stav){
     if(stav==='prerezerv')el.classList.add('active-p');
     if(stav==='planovana')el.classList.add('active-pl');
   }else editStav='planovana';
+  _fikSync('e', editStav);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -4678,7 +4688,7 @@ function zapisObjednavku(){
     typ:document.getElementById('n-typ').value.trim(),
     balik:document.getElementById('n-balik').value.trim(),
     prijatia:document.getElementById('n-prijatia').value, plan,
-    fiktiv:!!document.getElementById('n-fiktiv')?.checked,
+    fiktiv:!!document.getElementById('n-fiktiv')?.checked && currentStavNova!=='hotova' && currentStavNova!=='storno',
     real:document.getElementById('n-real').value, lt,
     zdroj:document.getElementById('n-technik').value.trim(),
     add_txt, pozn, farba,
@@ -4769,7 +4779,7 @@ function _sendAiLog(event, idObj, obj){
 function vymazatFormu(){
   ['n-id','n-meno','n-adresa','n-typ','n-balik','n-add','n-pozn','n-technik','n-telefon','n-kod','n-region'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList&&el.classList.remove('add-a');}});
   ['n-lt','n-plan','n-real'].forEach(id=>document.getElementById(id).value='');
-  const nFik=document.getElementById('n-fiktiv');if(nFik)nFik.checked=false;
+  const nFik=document.getElementById('n-fiktiv');if(nFik){nFik.disabled=false;nFik.checked=false;_fikSync('n','');}
   const nOd=document.getElementById('n-cas-od');if(nOd)nOd.value='';
   const nDo=document.getElementById('n-cas-do');if(nDo)nDo.value='';
   document.getElementById('n-prijatia').value=T;
@@ -4839,6 +4849,7 @@ function draftRestore(){
     {const f=document.getElementById('n-fiktiv');if(f) f.checked=!!d._fiktiv;}
     // Stav (zelené/žlté tlačidlo)
     if(d._stav){currentStavNova=d._stav;document.querySelectorAll('#n-stav-opts .stav-opt').forEach(o=>{o.classList.toggle('active',o.dataset.stav===d._stav);});}
+    _fikSync('n', currentStavNova);
     if(draftBanner) draftBanner.style.display='none';
     toast('✓ Rozpracovaná objednávka obnovená');
     switchTab(0);
@@ -5566,8 +5577,9 @@ const LockManager = {
 
   // ───── Internal UI ─────
   _setReadOnlyUI(ro){
+    { const f=document.getElementById('e-fiktiv'); if(f){ if(ro){ f.dataset.roPred=f.disabled?'1':''; f.disabled=true; } else { f.disabled = f.dataset.roPred==='1' || editStav==='hotova' || editStav==='storno'; } } }
     // Disable všetky inputy v edit modali pri read-only, alebo ich uvoľní
-    const ids = ['e-meno','e-adresa','e-typ','e-balik','e-prijatia','e-lt','e-add','e-plan','e-fiktiv','e-technik','e-pozn','e-telefon','e-region','e-real'];
+    const ids = ['e-meno','e-adresa','e-typ','e-balik','e-prijatia','e-lt','e-add','e-plan','e-technik','e-pozn','e-telefon','e-region','e-real'];
     ids.forEach(id => {
       const el = document.getElementById(id);
       if(el){
@@ -5675,7 +5687,7 @@ function otvorEditModal(id_obj){
   document.getElementById('e-lt').value=o.lt||'';
   document.getElementById('e-add').value=o.add_txt||'';
   document.getElementById('e-plan').value=o.plan||'';
-  {const f=document.getElementById('e-fiktiv');if(f)f.checked=!!o.fiktiv;}
+  {const f=document.getElementById('e-fiktiv');if(f){f.disabled=false;f.dataset.roPred='';f.dataset.pred='';f.checked=!!o.fiktiv;}}
   _casOdSel('e');
   const eOd=document.getElementById('e-cas-od');
   if(eOd)eOd.value=o.cas_od||'';
@@ -5690,6 +5702,7 @@ function otvorEditModal(id_obj){
   const opts=document.querySelectorAll('#e-stav-opts .stav-opt');
   opts.forEach(op=>op.className='stav-opt');
   const ao=document.querySelector(`#e-stav-opts [data-stav="${editStav}"]`);
+  _fikSync('e', editStav);
   if(ao){if(editStav==='hotova')ao.classList.add('active-h');else if(editStav==='storno')ao.classList.add('active-s');else if(editStav==='prerezerv')ao.classList.add('active-p');else ao.classList.add('active-pl');}
   document.getElementById('edit-title').textContent=`Úprava – ${id_obj}`;
   document.getElementById('edit-overlay').classList.add('open');
@@ -5787,7 +5800,7 @@ function saveEdit(){
   o.typ=document.getElementById('e-typ').value;o.balik=document.getElementById('e-balik').value;
   o.prijatia=document.getElementById('e-prijatia').value;o.lt=lt;o.add_txt=add_txt;
   o.plan=plan;o.zdroj=document.getElementById('e-technik').value;o.pozn=pozn;
-  o.fiktiv=!!document.getElementById('e-fiktiv')?.checked;
+  o.fiktiv=!!document.getElementById('e-fiktiv')?.checked && farba!=='zelena' && farba!=='zlta';
   o.telefon=document.getElementById('e-telefon').value.trim();
   o.kod_aktivity=document.getElementById('e-kod').value.trim();
   o.region=(document.getElementById('e-region')?.value||'').trim().toUpperCase();
@@ -5851,19 +5864,21 @@ function saveEdit(){
 }
 function uzavriDnes(){
   const oi=MOCK_OBJ.findIndex(o=>o.id_obj===editCurrentId);if(oi<0)return;
-  MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();
+  const _fk=!!MOCK_OBJ[oi].fiktiv;
+  MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();MOCK_OBJ[oi].fiktiv=false;
   toast(`✅ Uzavreté: ${editCurrentId}`);closeEdit();afterEditRefresh();
   logHistoria(editCurrentId,'uzavretie',`Uzavretie: realizácia ${T}`);
-  patchObj(editCurrentId, {datum_realizacie: T, farba: 'zelena'});
+  patchObj(editCurrentId, Object.assign({datum_realizacie: T, farba: 'zelena'}, _fk?{fiktiv:false}:{}));
 }
 function stornujDnes(){
   const oi=MOCK_OBJ.findIndex(o=>o.id_obj===editCurrentId);if(oi<0)return;
   const pozn=document.getElementById('e-pozn').value.trim();
   if(!pozn){const w=document.getElementById('e-warn');w.style.display='block';w.textContent='⚠ Dôvod storna musí byť v Poznámkach!';return;}
-  MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=pozn;MOCK_OBJ[oi].zmeneny=now8();
+  const _fk=!!MOCK_OBJ[oi].fiktiv;
+  MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=pozn;MOCK_OBJ[oi].zmeneny=now8();MOCK_OBJ[oi].fiktiv=false;
   toast(`⚠ Vystornované: ${editCurrentId}`);closeEdit();afterEditRefresh();
   logHistoria(editCurrentId,'storno','Stornovanie');
-  patchObj(editCurrentId, {datum_realizacie: T, farba: 'zlta', poznamky: pozn});
+  patchObj(editCurrentId, Object.assign({datum_realizacie: T, farba: 'zlta', poznamky: pozn}, _fk?{fiktiv:false}:{}));
 }
 function afterEditRefresh(){
   renderRecent();refreshCap();updateDash();
@@ -5961,10 +5976,11 @@ function mobUzavri(id){
     '✅ Áno, uzavrieť', '#16a34a',
     ()=>{
       const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
-      MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();
+      const _fk=!!MOCK_OBJ[oi].fiktiv;
+      MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zelena';MOCK_OBJ[oi].zmeneny=now8();MOCK_OBJ[oi].fiktiv=false;
       updateDash();renderMobil();toast(`✅ Uzavreté: ${id}`);
       logHistoria(id,'uzavretie',`Uzavretie: realizácia ${T}`);
-      patchObj(id, {datum_realizacie: T, farba: 'zelena'});
+      patchObj(id, Object.assign({datum_realizacie: T, farba: 'zelena'}, _fk?{fiktiv:false}:{}));
     }
   );
 }
@@ -5978,10 +5994,11 @@ function mobStornuj(id){
     '✅ Áno, stornovať', '#dc2626',
     ()=>{
       const oi=MOCK_OBJ.findIndex(o=>o.id_obj===id);if(oi<0)return;
-      MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=dovod;MOCK_OBJ[oi].zmeneny=now8();
+      const _fk=!!MOCK_OBJ[oi].fiktiv;
+      MOCK_OBJ[oi].real=T;MOCK_OBJ[oi].farba='zlta';MOCK_OBJ[oi].pozn=dovod;MOCK_OBJ[oi].zmeneny=now8();MOCK_OBJ[oi].fiktiv=false;
       updateDash();renderMobil();toast(`⚠ Vystornované: ${id}`);
       logHistoria(id,'storno','Stornovanie');
-      patchObj(id, {datum_realizacie: T, farba: 'zlta', poznamky: dovod});
+      patchObj(id, Object.assign({datum_realizacie: T, farba: 'zlta', poznamky: dovod}, _fk?{fiktiv:false}:{}));
     }
   );
 }
