@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="sk"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Správa systému</title>
+<style>
+:root{--bg:#f1f4f9;--card:#fff;--bd:#dde3ec;--tx:#1e293b;--mu:#64748b;--blue:#1d4ed8;--green:#16a34a;--amber:#b45309;--red:#dc2626;--gray:#94a3b8}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,Segoe UI,Arial,sans-serif}
+.top{background:#0f172a;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top h1{font-size:17px;margin:0}.top .sub{color:#94a3b8;font-size:12px}
+.env{margin-left:auto;display:flex;background:#1e293b;border-radius:8px;padding:3px}
+.env b{padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px;color:#cbd5e1;user-select:none}
+.env b.on-prod{background:#dc2626;color:#fff}.env b.on-dev{background:#2563eb;color:#fff}
+.who{font-size:12px;color:#cbd5e1}.who a{color:#93c5fd;cursor:pointer}
+.wrap{max-width:1180px;margin:18px auto;padding:0 16px;display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;min-width:0}
+.card h2{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:6px}.hint{color:var(--mu);font-size:12px;margin-bottom:12px}
+.full{grid-column:1/-1}
+.kpi{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}.kpi div{flex:1;min-width:100px;border:1px solid var(--bd);border-radius:8px;padding:8px 10px}
+.kpi span{display:block;font-size:22px;font-weight:700}.kpi small{color:var(--mu);font-size:11px}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--mu);font-weight:600;font-size:11px;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #eef1f5;vertical-align:top}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.s1{color:var(--green);white-space:nowrap}.s1 .dot{background:var(--green)}.s2{color:var(--amber);white-space:nowrap}.s2 .dot{background:#f59e0b}
+.tag{font-size:11px;padding:1px 7px;border-radius:10px;background:#eef2ff;color:#3730a3;white-space:nowrap}.tag.poruchy{background:#fce7f3;color:#9d174d}.tag.mobil{background:#ecfeff;color:#155e75}.tag.spravca{background:#f1f5f9;color:#334155}
+.btn{border:0;border-radius:7px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:13px}.btn:disabled{opacity:.5;cursor:default}
+.b-blue{background:var(--blue);color:#fff}.b-gray{background:#e2e8f0;color:var(--tx)}.b-red{background:#fee2e2;color:var(--red)}.b-sm{padding:4px 9px;font-size:12px}
+label{display:block;font-size:12px;color:var(--mu);margin:10px 0 4px;font-weight:600}
+textarea,select,input{width:100%;border:1px solid var(--bd);border-radius:7px;padding:8px;font:inherit;background:#fff;color:var(--tx)}
+textarea{min-height:70px;resize:vertical}.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.tpl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.tpl span{font-size:11px;background:#f1f5f9;border:1px solid var(--bd);border-radius:12px;padding:3px 9px;cursor:pointer}
+.act{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.live{margin-top:12px;border:1px dashed #f59e0b;background:#fffbeb;border-radius:8px;padding:10px;font-size:12px}
+.ok{color:var(--green);font-weight:600}.diff{color:var(--amber);font-weight:600}.mu{color:var(--mu)}.err{color:var(--red);font-size:12px;min-height:16px;margin-top:6px}
+.num{display:inline-flex;width:20px;height:20px;border-radius:50%;background:#0f172a;color:#fff;font-size:11px;align-items:center;justify-content:center}
+.login{max-width:360px;margin:60px auto;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:22px}
+.login h2{margin:0 0 4px;font-size:17px}
+.nov-item{border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-top:10px}
+.nov-item .h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.nov-item .h b{font-size:14px}
+.ver{background:#ede9fe;color:#6d28d9;border-radius:8px;padding:1px 8px;font-size:12px;font-weight:700}
+.nov-item ul{margin:6px 0;padding-left:20px}.nov-item p{margin:4px 0}
+.small{font-size:12px}.off{opacity:.55}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;display:none;z-index:99}
+</style></head><body>
+<div class="top">
+  <div><h1>⚙ Správa systému DISPEČING</h1><div class="sub">len pre správcu systému</div></div>
+  <div class="env"><b id="e-prod" onclick="prepniEnv('prod')">PROD</b><b id="e-dev" onclick="prepniEnv('dev')">DEV</b></div>
+  <div class="who" id="who"></div>
+</div>
+
+<div id="v-login" style="display:none">
+  <div class="login">
+    <h2>Prihlásenie – <span id="l-env"></span></h2>
+    <div class="hint">Rovnaké meno a heslo ako do aplikácie. Prístup má len správca systému.</div>
+    <label>E-mail</label><input id="l-email" type="email" autocomplete="username">
+    <label>Heslo</label><input id="l-pass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')prihlas()">
+    <div class="err" id="l-err"></div>
+    <button class="btn b-blue" style="width:100%;margin-top:6px" onclick="prihlas()">Prihlásiť</button>
+  </div>
+</div>
+
+<div id="v-app" class="wrap" style="display:none">
+  <div class="card">
+    <h2><span class="num">1</span>Kto je v systéme <span class="mu small" id="on-cas" style="margin-left:auto;font-weight:400"></span></h2>
+    <div class="hint">Obnovuje sa každých 30 s. <b>Aktívny</b> = robil niečo za posledných 5 min, <b>nečinný</b> = má otvorené okno, ale nepracuje.</div>
+    <div class="kpi"><div><span class="s1" id="k-akt">–</span><small>aktívni</small></div><div><span class="s2" id="k-nec">–</span><small>nečinní (otvorené okno)</small></div><div><span id="k-spolu">–</span><small>prihlásení spolu</small></div></div>
+    <div class="tw"><table><thead><tr><th>Stav</th><th>Používateľ</th><th>Stredisko</th><th>Modul</th><th>Posledná činnosť</th><th>Prihlásený od</th><th>Verzia</th></tr></thead><tbody id="on-tbody"></tbody></table></div>
+    <div class="hint" style="margin:8px 0 0">Zoznam platí od posledného reštartu backendu (<span id="be-start">–</span>). Po nasadení sa plní znova, ako sa ľudia prihlásia.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span>Oznam všetkým</h2>
+    <div class="hint">Zobrazí sa prihláseným do 30 s (aj tým, čo sa prihlásia neskôr), kým ho nezrušíš. Po reštarte backendu zmizne sám.</div>
+    <label>Text oznamu</label>
+    <textarea id="oz-text" maxlength="500"></textarea>
+    <div class="tpl">
+      <span onclick="sablona('Nasadzujem novú verziu. Ulož rozpracovanú prácu a odhlás sa, prosím.',5)">Nasadzujem novú verziu…</span>
+      <span onclick="sablona('Krátka odstávka systému cca 5 minút. Ulož rozpracovanú prácu, prosím.',5)">Krátka odstávka…</span>
+      <span onclick="sablona('',0)">Vlastný text</span>
+    </div>
+    <div class="row">
+      <div><label>Komu</label><select id="oz-st"><option value="">Všetkým strediskám</option><option value="zilina">Len Žilina</option><option value="trencin">Len Trenčín</option><option value="bratislava">Len Bratislava</option></select></div>
+      <div><label>Odpočet</label><select id="oz-cd"><option value="0">bez odpočtu</option><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option></select></div>
+    </div>
+    <div class="act"><button class="btn b-blue" onclick="posliOznam()">📢 Odoslať oznam</button><button class="btn b-gray" onclick="zrusOznam()">Zrušiť oznam</button></div>
+    <div id="oz-live"></div>
+  </div>
+
+  <div class="card full">
+    <h2><span class="num">3</span>Čo je nové vo verzii</h2>
+    <div class="hint">Napíš pred nasadením. Kto má starú verziu, uvidí <b>nadpis</b> v modrom pruhu „Je dostupná nová verzia". Po obnovení stránky sa každému raz ukáže okno s celým textom. Riadky začínajúce „-" sú odrážky.</div>
+    <div class="row" style="flex-wrap:wrap">
+      <div style="flex:0 0 120px"><label>Verzia webu</label><input id="nv-ver" placeholder="v34"></div>
+      <div style="flex:3;min-width:220px"><label>Nadpis (krátko, do modrého pruhu)</label><input id="nv-nadpis" maxlength="150" placeholder="napr. Fiktívny termín pri objednávkach"></div>
+      <div style="flex:0 0 220px"><label>Pre koho</label><select id="nv-pre"><option value="dispeceri">Dispečing (bez technikov)</option><option value="vsetci">Všetkých vrátane technikov</option><option value="technici">Len technikov (mobil)</option></select></div>
+    </div>
+    <label>Text (body zmien)</label>
+    <textarea id="nv-text" style="min-height:110px" placeholder="- Pri plánovanom dátume pribudlo políčko Fiktív&#10;- V Objednávkach je nový rýchly filter Fiktívne"></textarea>
+    <div class="act"><button class="btn b-blue" id="nv-ulozit" onclick="ulozNovinku()">Uložiť novinku</button><button class="btn b-gray" id="nv-zrusit" style="display:none" onclick="zrusUpravu()">Zrušiť úpravu</button><span class="err" id="nv-err"></span></div>
+    <div id="nv-list"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span>Nasadené verzie</h2>
+    <div class="hint">Čo práve beží na PROD a DEV. Rozdiel medzi PROD a DEV je oranžovo.</div>
+    <div class="tw"><table><tbody id="ver-tbody"></tbody></table></div>
+    <div class="act"><button class="btn b-gray b-sm" onclick="nacitajVerzie()">Obnoviť</button></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">5</span>Núdzové akcie</h2>
+    <div class="hint">Len keď treba – vždy s potvrdením.</div>
+    <button class="btn b-red" onclick="odhlasVsetkych()">⏏ Odhlásiť všetkých okrem mňa</button>
+    <div class="hint" style="margin-top:8px">Tvoje prihlásenia (táto stránka aj aplikácia) ostanú. Ostatným sa zobrazí červený pruh „Prihlásenie vypršalo".</div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// Správa systému DISPEČING (spravca.html) – samostatná stránka
+// Komunikuje s /api/sys/admin/* (backend v20+), prístup len SYS_ADMINS.
+// ════════════════════════════════════════════════════════════
+const ENV = {
+  prod: { nazov: 'PROD', api: 'https://dispecing-api.onrender.com',     web: 'https://brigantjan.github.io/dicpecing-web/' },
+  dev:  { nazov: 'DEV',  api: 'https://dispecing-api-dev.onrender.com', web: 'https://brigantjan.github.io/dispecing-web-dev/' },
+};
+const ST = { zilina: 'Žilina', trencin: 'Trenčín', bratislava: 'Bratislava' };
+const MODUL = { balicky: 'Balíčky', poruchy: 'Poruchy', mobil: 'Mobil', spravca: 'Správa' };
+const PRE = { dispeceri: 'Dispečing', vsetci: 'Všetci', technici: 'Technici' };
+let env = (location.pathname.includes('dispecing-web-dev') || location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'dev' : 'prod';
+try{ const e = sessionStorage.getItem('spr_env'); if(e === 'prod' || e === 'dev') env = e; }catch(_){}
+let tokeny = {}; try{ tokeny = JSON.parse(sessionStorage.getItem('spr_tok') || '{}') || {}; }catch(_){ tokeny = {}; }
+let _timer = null, _upravaId = 0, _novinky = [];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+function toast(t){ const e = $('toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => e.style.display = 'none', 3500); }
+function ulozTok(){ try{ sessionStorage.setItem('spr_tok', JSON.stringify(tokeny)); sessionStorage.setItem('spr_env', env); }catch(_){} }
+function cas(iso){ if(!iso) return '–'; const d = new Date(iso); return isNaN(d) ? '–' : d.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' }); }
+function datcas(iso){ if(!iso) return '–'; const d = new Date(iso); return isNaN(d) ? '–' : d.toLocaleString('sk-SK', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+function pred(iso){
+  if(!iso) return '–'; const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if(s < 60) return 'práve teraz'; const m = Math.round(s / 60);
+  if(m < 60) return `pred ${m} min`; return `pred ${Math.floor(m / 60)} h ${m % 60} min`;
+}
+function formatText(text){
+  let h = '', ul = false;
+  String(text || '').split(/\r?\n/).forEach(l => {
+    const t = l.trim(), b = /^[-•*]\s+(.*)$/.exec(t);
+    if(b){ if(!ul){ h += '<ul>'; ul = true; } h += `<li>${esc(b[1])}</li>`; return; }
+    if(ul){ h += '</ul>'; ul = false; } if(t) h += `<p>${esc(t)}</p>`;
+  });
+  return h + (ul ? '</ul>' : '');
+}
+
+async function api(method, path, body, envKey){
+  const e = envKey || env;
+  const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Modul': 'spravca' }, cache: 'no-store' };
+  if(tokeny[e]) opts.headers['Authorization'] = 'Bearer ' + tokeny[e];
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(ENV[e].api + path, opts);
+  if(r.status === 401 && path !== '/api/login'){ delete tokeny[e]; ulozTok(); if(e === env) zobraz(); throw new Error('Prihlásenie vypršalo'); }
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : `HTTP ${r.status}`);
+  return d;
+}
+
+function prepniEnv(e){ env = e; ulozTok(); zobraz(); }
+function zobraz(){
+  $('e-prod').className = env === 'prod' ? 'on-prod' : '';
+  $('e-dev').className = env === 'dev' ? 'on-dev' : '';
+  document.title = `Správa systému – ${ENV[env].nazov}`;
+  clearInterval(_timer); _timer = null;
+  if(!tokeny[env]){
+    $('v-app').style.display = 'none'; $('v-login').style.display = 'block';
+    $('l-env').textContent = ENV[env].nazov; $('who').innerHTML = ''; $('l-err').textContent = '';
+    setTimeout(() => $('l-email').focus(), 50);
+    return;
+  }
+  $('v-login').style.display = 'none'; $('v-app').style.display = 'grid';
+  nacitajVsetko();
+  _timer = setInterval(nacitajOnline, 30000);
+}
+
+async function prihlas(){
+  const email = $('l-email').value.trim().toLowerCase(), heslo = $('l-pass').value;
+  if(!email || !heslo){ $('l-err').textContent = 'Zadaj e-mail a heslo'; return; }
+  $('l-err').textContent = 'Overujem…';
+  try{
+    const d = await api('POST', '/api/login', { email, heslo });
+    tokeny[env] = d.token;
+    try{ await api('GET', '/api/sys/admin/info'); }
+    catch(e){
+      try{ await api('POST', '/api/logout'); }catch(_){}
+      delete tokeny[env]; ulozTok();
+      $('l-err').textContent = /404/.test(e.message) ? 'Tento backend ešte nemá Správu systému (treba v20).' : 'Prístup len pre správcu systému.';
+      return;
+    }
+    $('l-pass').value = ''; ulozTok(); zobraz();
+  }catch(e){ $('l-err').textContent = e.message || 'Chyba prihlásenia'; }
+}
+async function odhlas(){
+  try{ await api('POST', '/api/logout'); }catch(_){}
+  delete tokeny[env]; ulozTok(); zobraz();
+}
+
+async function nacitajVsetko(){
+  try{
+    const i = await api('GET', '/api/sys/admin/info');
+    $('who').innerHTML = `${esc(i.ja.meno)} · <a onclick="odhlas()">Odhlásiť</a>`;
+    $('be-start').textContent = datcas(i.start);
+  }catch(e){ if(tokeny[env]) toast('⚠ ' + e.message); return; }
+  nacitajOnline(); nacitajNovinky(); nacitajVerzie();
+}
+
+// ── 1 + 2: online a oznam ────────────────────────────────────
+async function nacitajOnline(){
+  let d; try{ d = await api('GET', '/api/sys/admin/online'); }catch(e){ return; }
+  const L = (d.online || []).filter(o => o.modul !== 'spravca');   // táto stránka sama seba neukazuje
+  const akt = L.filter(o => o.stav === 'aktivny').length;
+  $('k-akt').textContent = akt; $('k-nec').textContent = L.length - akt; $('k-spolu').textContent = L.length;
+  $('on-cas').textContent = 'stav o ' + cas(d.cas);
+  $('on-tbody').innerHTML = L.length ? L.map(o => `<tr>
+    <td class="${o.stav === 'aktivny' ? 's1' : 's2'}"><span class="dot"></span>${o.stav === 'aktivny' ? 'Aktívny' : 'Nečinný'}</td>
+    <td>${esc(o.meno)}${o.ja ? ' <span class="mu small">(ty)</span>' : ''}<div class="mu small">${esc(o.rola)}</div></td>
+    <td>${esc(ST[o.stredisko] || o.stredisko || '–')}</td>
+    <td>${o.modul ? `<span class="tag ${esc(o.modul)}">${esc(MODUL[o.modul] || o.modul)}</span>` : '–'}</td>
+    <td>${pred(o.posledna_aktivita)}${o.akcia ? `<div class="mu small">${esc(o.akcia)} · ${cas(o.akcia_cas)}</div>` : ''}</td>
+    <td>${cas(o.prihlaseny)}</td>
+    <td class="small">${esc(o.web || '–')}</td></tr>`).join('')
+    : '<tr><td colspan="7" class="mu">Nikto nie je prihlásený.</td></tr>';
+  const oz = d.oznam;
+  if(oz){
+    const ciel = L.filter(o => !o.ja && (!oz.stredisko || o.stredisko === oz.stredisko));
+    const vid = ciel.filter(o => o.oznam_videny).length;
+    $('oz-live').innerHTML = `<div class="live">● <b>Aktívny oznam</b> od ${cas(oz.od)}${oz.koniec ? ` · odpočet do ${cas(oz.koniec)}` : ''}
+      · ${oz.stredisko ? esc(ST[oz.stredisko] || oz.stredisko) : 'všetky strediská'} · videlo ho <b>${vid} z ${ciel.length}</b> prihlásených
+      <div style="margin-top:4px">„${esc(oz.text)}"</div></div>`;
+  } else $('oz-live').innerHTML = '';
+}
+function sablona(t, min){ $('oz-text').value = t; $('oz-cd').value = String(min); $('oz-text').focus(); }
+async function posliOznam(){
+  const text = $('oz-text').value.trim();
+  if(!text){ toast('⚠ Napíš text oznamu'); return; }
+  try{ await api('POST', '/api/sys/admin/oznam', { text, stredisko: $('oz-st').value, odpocet_min: Number($('oz-cd').value) }); toast('📢 Oznam odoslaný'); nacitajOnline(); }
+  catch(e){ toast('❌ ' + e.message); }
+}
+async function zrusOznam(){
+  try{ await api('DELETE', '/api/sys/admin/oznam'); toast('Oznam zrušený'); nacitajOnline(); }catch(e){ toast('❌ ' + e.message); }
+}
+
+// ── 3: Čo je nové ────────────────────────────────────────────
+async function nacitajNovinky(){
+  try{ _novinky = await api('GET', '/api/sys/admin/novinky'); }catch(e){ $('nv-list').innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+  $('nv-list').innerHTML = _novinky.length ? _novinky.map(n => `<div class="nov-item ${n.aktivne ? '' : 'off'}">
+    <div class="h"><span class="ver">${esc(n.verzia)}</span><b>${esc(n.nadpis)}</b>
+      <span class="tag">${esc(PRE[n.pre] || n.pre)}</span>${n.aktivne ? '' : '<span class="tag spravca">vypnutá</span>'}
+      <span class="mu small" style="margin-left:auto">${datcas(n.vytvorene)} · ${esc(n.vytvoril || '')}</span></div>
+    ${formatText(n.text)}
+    <div class="small" style="margin-top:6px"><b>Prečítali ${n.precitali_n} z ${n.cielovi_n}</b>
+      ${n.precitali.length ? `<span class="mu"> – ${esc(n.precitali.join(', '))}</span>` : ''}</div>
+    <div class="act" style="margin-top:8px">
+      <button class="btn b-gray b-sm" onclick="upravNovinku(${n.id})">Upraviť</button>
+      <button class="btn b-gray b-sm" onclick="prepniAktivnu(${n.id})">${n.aktivne ? 'Vypnúť' : 'Zapnúť'}</button>
+      <button class="btn b-red b-sm" onclick="zmazNovinku(${n.id})">Zmazať</button></div></div>`).join('')
+    : '<div class="hint" style="margin-top:10px">Zatiaľ žiadne novinky.</div>';
+}
+async function ulozNovinku(){
+  const body = { verzia: $('nv-ver').value.trim(), nadpis: $('nv-nadpis').value.trim(), text: $('nv-text').value, pre: $('nv-pre').value, aktivne: true };
+  if(!body.verzia || !body.nadpis){ $('nv-err').textContent = 'Vyplň verziu a nadpis'; return; }
+  if(_upravaId){ const p = _novinky.find(x => x.id === _upravaId); if(p) body.aktivne = p.aktivne; }
+  try{
+    await api(_upravaId ? 'PATCH' : 'POST', '/api/sys/admin/novinky' + (_upravaId ? '/' + _upravaId : ''), body);
+    toast(_upravaId ? '✅ Novinka upravená' : '✅ Novinka uložená'); zrusUpravu(); nacitajNovinky();
+  }catch(e){ $('nv-err').textContent = e.message; }
+}
+function upravNovinku(id){
+  const n = _novinky.find(x => x.id === id); if(!n) return;
+  _upravaId = id; $('nv-ver').value = n.verzia; $('nv-nadpis').value = n.nadpis; $('nv-text').value = n.text; $('nv-pre').value = n.pre;
+  $('nv-ulozit').textContent = 'Uložiť úpravu'; $('nv-zrusit').style.display = ''; $('nv-err').textContent = '';
+  $('nv-ver').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function zrusUpravu(){
+  _upravaId = 0; ['nv-ver', 'nv-nadpis', 'nv-text'].forEach(i => $(i).value = ''); $('nv-pre').value = 'dispeceri';
+  $('nv-ulozit').textContent = 'Uložiť novinku'; $('nv-zrusit').style.display = 'none'; $('nv-err').textContent = '';
+}
+async function prepniAktivnu(id){
+  const n = _novinky.find(x => x.id === id); if(!n) return;
+  try{ await api('PATCH', '/api/sys/admin/novinky/' + id, { verzia: n.verzia, nadpis: n.nadpis, text: n.text, pre: n.pre, aktivne: !n.aktivne }); nacitajNovinky(); }
+  catch(e){ toast('❌ ' + e.message); }
+}
+async function zmazNovinku(id){
+  const n = _novinky.find(x => x.id === id); if(!n) return;
+  if(!confirm(`Zmazať novinku ${n.verzia} „${n.nadpis}"?`)) return;
+  try{ await api('DELETE', '/api/sys/admin/novinky/' + id); toast('Novinka zmazaná'); nacitajNovinky(); }catch(e){ toast('❌ ' + e.message); }
+}
+
+// ── 4: verzie ────────────────────────────────────────────────
+async function verziaWebu(url){
+  try{
+    const r = await fetch(url + '?_v=' + Date.now(), { cache: 'no-store' });
+    if(!r.ok) return { web: '?', por: '?' };
+    const h = await r.text();
+    const m = /<meta\s+name="app-version"\s+content="([^"]+)"/i.exec(h);
+    const p = /poruchy_modul_(v\d+[a-z]?)\.js/i.exec(h);
+    return { web: m ? m[1] : 'pred v33 (bez označenia)', por: p ? p[1] : '–' };
+  }catch(_){ return { web: 'nedostupné', por: 'nedostupné' }; }
+}
+async function verziaBackendu(api){
+  try{ const r = await fetch(api + '/api/health', { cache: 'no-store' }); const d = await r.json(); return d.backend || 'pred v20'; }
+  catch(_){ return 'nedostupný (možno sa prebúdza)'; }
+}
+async function nacitajVerzie(){
+  $('ver-tbody').innerHTML = '<tr><td class="mu">Načítavam…</td></tr>';
+  const [bp, bd, wp, wd] = await Promise.all([verziaBackendu(ENV.prod.api), verziaBackendu(ENV.dev.api), verziaWebu(ENV.prod.web), verziaWebu(ENV.dev.web)]);
+  const riadok = (n, p, d) => `<tr><td class="mu">${n}</td><td>PROD <b>${esc(p)}</b></td><td>DEV <b>${esc(d)}</b></td><td class="${p === d ? 'ok' : 'diff'}">${p === d ? '✓ rovnaké' : '≠ líšia sa'}</td></tr>`;
+  $('ver-tbody').innerHTML = riadok('Backend', bp, bd) + riadok('Web', wp.web, wd.web) + riadok('Modul Poruchy', wp.por, wd.por);
+}
+
+// ── 5: núdzové ───────────────────────────────────────────────
+async function odhlasVsetkych(){
+  if(!confirm(`Naozaj odhlásiť všetkých používateľov na ${ENV[env].nazov} (okrem teba)?\n\nRozpracovanú neuloženú prácu môžu stratiť.`)) return;
+  try{ const d = await api('POST', '/api/sys/admin/odhlasit-vsetkych'); toast(`⏏ Odhlásených: ${d.zrusene}`); nacitajOnline(); }catch(e){ toast('❌ ' + e.message); }
+}
+
+zobraz();
+</script>
+</body></html>
