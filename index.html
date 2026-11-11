@@ -2,6 +2,7 @@
 <html lang="sk">
 <head>
 <meta charset="UTF-8">
+<meta name="app-version" content="v33">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <!-- Zakáz cachovania – vždy načítaj čerstvú verziu -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -223,6 +224,23 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 ::placeholder{color:#c0c8d8!important;opacity:1}
 #n-add{color:var(--text)}
 #n-add.add-a{color:var(--red)!important;font-weight:700}
+/* v33: Správa systému – pruhy a okno Čo je nové */
+#sys-bars{position:fixed;top:0;left:0;right:0;z-index:10000;display:flex;flex-direction:column}
+.sys-bar{align-items:center;gap:10px;padding:9px 16px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2);flex-wrap:wrap}
+.sys-bar .sys-bt{flex:1;min-width:180px}
+.sys-bar button{border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.sys-b-oznam{background:#f59e0b;color:#111}.sys-b-oznam button{background:#fff;color:#111}
+.sys-b-upd{background:#1d4ed8;color:#fff}.sys-b-upd button{background:#fff;color:#1d4ed8}.sys-b-upd button.sys-b2{background:rgba(255,255,255,.2);color:#fff}
+.sys-b-exp{background:#dc2626;color:#fff}.sys-b-exp button{background:#fff;color:#dc2626}
+.sys-cd{background:#111;color:#fde68a;border-radius:6px;padding:2px 9px;font-variant-numeric:tabular-nums;font-weight:700}
+#sys-oznam-pill{position:fixed;right:16px;bottom:16px;z-index:10000;background:#f59e0b;color:#111;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;align-items:center;gap:8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#sys-novinky{position:fixed;inset:0;z-index:10001;background:rgba(15,23,42,.45);align-items:center;justify-content:center;padding:16px}
+.sys-nov-box{background:#fff;color:#1e293b;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.sys-nov-hd{font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.04em}
+.sys-nov-hd span{background:#ede9fe;border-radius:8px;padding:1px 8px;margin-left:4px;text-transform:none}
+.sys-nov-nadpis{font-size:18px;font-weight:700;margin:6px 0 8px}
+.sys-nov-text{font-size:14px;line-height:1.5}.sys-nov-text ul{margin:6px 0;padding-left:20px}.sys-nov-text li{margin:3px 0}.sys-nov-text p{margin:6px 0}
+
 .field label.fik-chk,.mfield label.fik-chk{display:inline-flex!important;align-items:center;gap:5px;margin:5px 0 0!important;padding:0!important;font-size:12px!important;font-weight:600;letter-spacing:0!important;text-transform:none!important;color:#7c3aed!important;cursor:pointer;user-select:none;width:auto!important}
 .fik-chk input[type=checkbox]{width:15px!important;height:15px!important;min-width:0!important;margin:0!important;padding:0!important;flex:0 0 auto;accent-color:#7c3aed;cursor:pointer;box-shadow:none!important}
 .fik-b{display:inline-block;margin-left:4px;padding:0 4px;border-radius:3px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;line-height:14px;vertical-align:middle}
@@ -410,11 +428,30 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <div style="width:38px;height:38px;border:4px solid #e2e8f0;border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite"></div>
   <div id="app-loader-text" style="color:var(--muted);font-size:13px;font-weight:500">Načítavam dáta…</div>
 </div>
-<!-- Update banner – zobrazí sa keď je dostupná nová verzia -->
-<div id="update-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:#1d4ed8;color:#fff;padding:8px 16px;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,.2)">
-  🔄 Je dostupná nová verzia DISPECING
-  <button onclick="location.reload(true)" style="background:#fff;color:#1d4ed8;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">Obnoviť teraz</button>
-  <button onclick="document.getElementById('update-bar').style.display='none'" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer">Neskôr</button>
+<!-- v33: horné pruhy správcu systému (oznam, nová verzia, vypršané prihlásenie) -->
+<div id="sys-bars">
+  <div id="sys-oznam" class="sys-bar sys-b-oznam" style="display:none">
+    <span>📢</span><span id="sys-oznam-text" class="sys-bt"></span><span id="sys-oznam-cd" class="sys-cd"></span>
+    <button onclick="sysOznamZmensi()">Rozumiem</button>
+  </div>
+  <div id="update-bar" class="sys-bar sys-b-upd" style="display:none">
+    <span>🔄</span><span id="upd-text" class="sys-bt">Je dostupná nová verzia aplikácie.</span>
+    <button onclick="sysObnovit()">Obnoviť stránku</button>
+    <button class="sys-b2" onclick="sysNeskor()">Neskôr</button>
+  </div>
+  <div id="sys-expir" class="sys-bar sys-b-exp" style="display:none">
+    <span>🔒</span><span class="sys-bt">Prihlásenie vypršalo (nasadená nová verzia alebo odhlásenie správcom). Ak máš niečo rozpísané, odlož si to a prihlás sa znova.</span>
+    <button onclick="doLogout()">Prihlásiť znova</button>
+  </div>
+</div>
+<div id="sys-oznam-pill" style="display:none" onclick="sysOznamRozbal()" title="Zobraziť oznam">📢 Oznam <span id="sys-oznam-pill-cd" class="sys-cd"></span></div>
+<div id="sys-novinky" style="display:none">
+  <div class="sys-nov-box">
+    <div class="sys-nov-hd">✨ Čo je nové <span id="sys-nov-ver"></span></div>
+    <div id="sys-nov-nadpis" class="sys-nov-nadpis"></div>
+    <div id="sys-nov-text" class="sys-nov-text"></div>
+    <div style="text-align:right;margin-top:14px"><button onclick="sysNovinkaOk()" style="background:#7c3aed;color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Rozumiem</button></div>
+  </div>
 </div>
 <div id="login-screen">
 <div class="lcard">
@@ -1326,6 +1363,7 @@ let API_TOKEN=null; // JWT token po prihlásení
 async function api(method, path, body=null){
   const opts={method, headers:{'Content-Type':'application/json'}};
   if(API_TOKEN) opts.headers['Authorization']=`Bearer ${API_TOKEN}`;
+  if(API_TOKEN && typeof _sysHlavicky==='function') Object.assign(opts.headers, _sysHlavicky());   // v33
   if(body) opts.body=JSON.stringify(body);
   try{
     const r=await fetch(API_URL+path, opts);
@@ -2451,6 +2489,7 @@ function doLogin(){
     if(user.rola==='admin'||user.rola==='vedenie') await loadUsers();
     initApp();
     startPolling();
+    if(typeof sysStart==='function') sysStart();   // v33: oznam správcu, nová verzia, Čo je nové
     // Poruchy do kapacity – na pozadí, po načítaní prekresli kapacitu (aplikáciu neblokuje)
     loadPoruchyKapacita(true).then(z=>{ if(z && document.getElementById('cap-wrap')) refreshCap(); });
     // Osobné nastavenie skrytých technikov v kapacite – na pozadí, potom prekresli
@@ -2515,6 +2554,7 @@ function applyRole(user){
 
 function doLogout(){
   stopPolling();
+  if(typeof sysStop==='function') sysStop();
   if(API_TOKEN) api('POST','/api/logout').catch(()=>{});
   API_TOKEN=null;
   currentUser=null;
@@ -8294,5 +8334,159 @@ function aiLogExportCsv(){
 
 </script>
 <!-- Modul Poruchy (KROK 3) – samostatný súbor v rovnakom repozitári ako index.html -->
+<script>
+// ════════════════════════════════════════════════════════════
+// v33: SPRÁVA SYSTÉMU – klientská časť
+//  • každých 30 s heartbeat /api/sys/stav (oznam od správcu, kto je online)
+//  • každých 5 min kontrola novej verzie webu (<meta name="app-version">)
+//  • po prihlásení okno „Čo je nové" pre aktuálnu verziu (raz na používateľa)
+// ════════════════════════════════════════════════════════════
+const WEB_VERZIA = (document.querySelector('meta[name="app-version"]')?.content) || '';
+let _sysTimer = null, _sysVerTimer = null, _sysCdTimer = null;
+let _sysPoslVstup = Date.now();
+let _sysOznam = null, _sysOznamMin = 0, _sysOznamVideny = 0;
+let _sysNova = '', _sysNovaNadpis = '', _sysNeskorDo = 0, _sysOffset = 0, _sysVypnute = false;
+['mousedown','keydown','touchstart','wheel'].forEach(ev =>
+  document.addEventListener(ev, () => { _sysPoslVstup = Date.now(); }, { passive: true, capture: true }));
+// Po „Obnoviť stránku" odstráň ?v= z adresy
+try{ const u = new URL(location.href); if(u.searchParams.has('v')){ u.searchParams.delete('v'); history.replaceState(null, '', u.pathname + (u.search || '') + u.hash); } }catch(_){}
+
+function _sysHlavicky(){
+  let modul = 'balicky';
+  if(currentUser?.rola === 'technik') modul = 'mobil';
+  else if(window.PoruchyModul?.rezim === 'poruchy') modul = 'poruchy';
+  return { 'X-Web-Verzia': WEB_VERZIA, 'X-Modul': modul,
+           'X-Aktivita-Pred': String(Math.max(0, Math.round((Date.now() - _sysPoslVstup) / 1000))) };
+}
+function _sysVerKluc(v){
+  const m = /^v?(\d+)([a-z]*)$/i.exec(String(v || '').trim());
+  return m ? [Number(m[1]), m[2].toLowerCase()] : [-1, ''];
+}
+function _sysNovsia(a, b){   // je verzia a novšia ako b?
+  const x = _sysVerKluc(a), y = _sysVerKluc(b);
+  if(x[0] < 0 || y[0] < 0) return false;
+  return x[0] !== y[0] ? x[0] > y[0] : x[1] > y[1];
+}
+const _sysEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function sysStart(){
+  sysStop(); _sysVypnute = false;
+  _sysTick(true);
+  _sysTimer = setInterval(() => _sysTick(false), 30000);
+  setTimeout(_sysKontrolaVerzie, 60000);
+  _sysVerTimer = setInterval(_sysKontrolaVerzie, 5 * 60000);
+}
+function sysStop(){
+  clearInterval(_sysTimer); clearInterval(_sysVerTimer); clearInterval(_sysCdTimer);
+  _sysTimer = _sysVerTimer = _sysCdTimer = null;
+  _sysOznam = null; _sysRenderOznam();
+  const ex = document.getElementById('sys-expir'); if(ex) ex.style.display = 'none';
+}
+
+async function _sysTick(prvy){
+  if(!API_TOKEN || !currentUser || _sysVypnute) return;
+  const q = new URLSearchParams({ web: WEB_VERZIA });
+  if(prvy) q.set('novinky', '1');
+  if(_sysOznamVideny) q.set('ov', String(_sysOznamVideny));
+  if(_sysNova && !_sysNovaNadpis) q.set('nova', _sysNova);
+  let r;
+  try{ r = await fetch(API_URL + '/api/sys/stav?' + q, { headers: { 'Authorization': `Bearer ${API_TOKEN}`, ..._sysHlavicky() }, cache: 'no-store' }); }
+  catch(_){ return; }                                   // sieť / backend sa reštartuje
+  if(r.status === 401){ _sysExpirovane(); return; }
+  if(r.status === 404){ _sysVypnute = true; return; }   // starý backend bez /api/sys
+  if(!r.ok) return;
+  const d = await r.json().catch(() => null); if(!d) return;
+  if(d.cas){ const t = Date.parse(d.cas); if(!isNaN(t)) _sysOffset = t - Date.now(); }
+  _sysOznam = d.oznam || null;
+  _sysRenderOznam();
+  if(d.nova_nadpis){ _sysNovaNadpis = d.nova_nadpis; _sysRenderUpdate(); }
+  if(d.novinka) _sysNovinka(d.novinka);
+}
+
+// ── Prihlásenie vypršalo (nasadenie backendu / odhlásenie správcom) ──
+function _sysExpirovane(){
+  _sysVypnute = true;
+  const el = document.getElementById('sys-expir'); if(el) el.style.display = 'flex';
+}
+
+// ── Oznam od správcu ─────────────────────────────────────────
+function _sysRenderOznam(){
+  const bar = document.getElementById('sys-oznam'), pill = document.getElementById('sys-oznam-pill');
+  if(!bar || !pill) return;
+  if(!_sysOznam){
+    bar.style.display = 'none'; pill.style.display = 'none';
+    clearInterval(_sysCdTimer); _sysCdTimer = null; return;
+  }
+  const min = _sysOznamMin === _sysOznam.id;
+  document.getElementById('sys-oznam-text').textContent = _sysOznam.text;
+  bar.style.display = min ? 'none' : 'flex';
+  pill.style.display = min ? 'flex' : 'none';
+  _sysOznamVideny = _sysOznam.id;
+  _sysCountdown();
+  if(_sysOznam.koniec && !_sysCdTimer) _sysCdTimer = setInterval(_sysCountdown, 1000);
+}
+function _sysCountdown(){
+  const cds = [document.getElementById('sys-oznam-cd'), document.getElementById('sys-oznam-pill-cd')];
+  if(!_sysOznam || !_sysOznam.koniec){ cds.forEach(c => { if(c) c.style.display = 'none'; }); return; }
+  const zost = Math.round((Date.parse(_sysOznam.koniec) - (Date.now() + _sysOffset)) / 1000);
+  const txt = zost > 0 ? `${String(Math.floor(zost / 60)).padStart(2, '0')}:${String(zost % 60).padStart(2, '0')}` : 'teraz';
+  cds.forEach(c => { if(c){ c.style.display = ''; c.textContent = txt; } });
+}
+function sysOznamZmensi(){ if(_sysOznam){ _sysOznamMin = _sysOznam.id; _sysRenderOznam(); } }
+function sysOznamRozbal(){ _sysOznamMin = 0; _sysRenderOznam(); }
+
+// ── Nová verzia webu ─────────────────────────────────────────
+async function _sysKontrolaVerzie(){
+  if(!WEB_VERZIA || !API_TOKEN) return;
+  try{
+    const r = await fetch(location.pathname + '?_v=' + Date.now(), { cache: 'no-store', headers: { 'Range': 'bytes=0-4095' } });
+    if(!r.ok) return;
+    const html = await r.text();
+    const m = /<meta\s+name="app-version"\s+content="([^"]+)"/i.exec(html);
+    if(!m || !_sysNovsia(m[1], WEB_VERZIA)) return;
+    if(_sysNova !== m[1]){ _sysNova = m[1]; _sysNovaNadpis = ''; _sysTick(false); }
+    _sysRenderUpdate();
+  }catch(_){}
+}
+function _sysRenderUpdate(){
+  const bar = document.getElementById('update-bar'); if(!bar || !_sysNova) return;
+  if(Date.now() < _sysNeskorDo) return;
+  document.getElementById('upd-text').textContent = _sysNovaNadpis
+    ? `Je dostupná nová verzia aplikácie: ${_sysNovaNadpis}` : 'Je dostupná nová verzia aplikácie.';
+  bar.style.display = 'flex';
+}
+function sysObnovit(){
+  const u = new URL(location.href); u.searchParams.set('v', _sysNova || String(Date.now()));
+  location.replace(u.pathname + u.search + u.hash);
+}
+function sysNeskor(){ _sysNeskorDo = Date.now() + 30 * 60000; document.getElementById('update-bar').style.display = 'none'; }
+
+// ── Čo je nové ───────────────────────────────────────────────
+function _sysFormat(text){
+  let h = '', ul = false;
+  String(text || '').split(/\r?\n/).forEach(l => {
+    const t = l.trim(), b = /^[-•*]\s+(.*)$/.exec(t);
+    if(b){ if(!ul){ h += '<ul>'; ul = true; } h += `<li>${_sysEsc(b[1])}</li>`; return; }
+    if(ul){ h += '</ul>'; ul = false; }
+    if(t) h += `<p>${_sysEsc(t)}</p>`;
+  });
+  return h + (ul ? '</ul>' : '');
+}
+let _sysNovinkaId = 0;
+function _sysNovinka(n){
+  try{ if(localStorage.getItem('sys_novinka_' + currentUser.id + '_' + n.id)) return; }catch(_){}
+  _sysNovinkaId = n.id;
+  document.getElementById('sys-nov-ver').textContent = n.verzia;
+  document.getElementById('sys-nov-nadpis').textContent = n.nadpis;
+  document.getElementById('sys-nov-text').innerHTML = _sysFormat(n.text);
+  document.getElementById('sys-novinky').style.display = 'flex';
+}
+async function sysNovinkaOk(){
+  document.getElementById('sys-novinky').style.display = 'none';
+  const id = _sysNovinkaId; _sysNovinkaId = 0; if(!id) return;
+  try{ localStorage.setItem('sys_novinka_' + currentUser.id + '_' + id, '1'); }catch(_){}
+  try{ await api('POST', `/api/sys/novinky/${id}/precitane`); }catch(_){}
+}
+</script>
 <script src="poruchy_modul_v10.js"></script>
 </body></html>
