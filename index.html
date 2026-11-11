@@ -223,6 +223,9 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 ::placeholder{color:#c0c8d8!important;opacity:1}
 #n-add{color:var(--text)}
 #n-add.add-a{color:var(--red)!important;font-weight:700}
+.field label.fik-chk,.mfield label.fik-chk{display:inline-flex!important;align-items:center;gap:5px;margin:5px 0 0!important;padding:0!important;font-size:12px!important;font-weight:600;letter-spacing:0!important;text-transform:none!important;color:#7c3aed!important;cursor:pointer;user-select:none;width:auto!important}
+.fik-chk input[type=checkbox]{width:15px!important;height:15px!important;min-width:0!important;margin:0!important;padding:0!important;flex:0 0 auto;accent-color:#7c3aed;cursor:pointer;box-shadow:none!important}
+.fik-b{display:inline-block;margin-left:4px;padding:0 4px;border-radius:3px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;line-height:14px;vertical-align:middle}
 /* ─── FILTER ROW sticky (oba riadky hlavičky) ─────────── */
 .tbl thead tr:first-child th{top:0;z-index:6}
 .filter-row th{background:#e8ecf4;padding:2px 3px!important;position:sticky;top:35px;z-index:5}
@@ -554,7 +557,8 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <div class="field" style="flex:0 0 58px"><label>ADD</label>
             <input type="text" id="n-add" placeholder="A" style="text-transform:uppercase" maxlength="2" oninput="onAddInput(this)"></div>
           <div class="field" style="flex:1;min-width:110px"><label>Plánovaný dátum</label>
-            <input type="date" id="n-plan"></div>
+            <input type="date" id="n-plan">
+            <label class="fik-chk" title="Plánovaný dátum je len fiktívny (orientačný)"><input type="checkbox" id="n-fiktiv"> Fiktív</label></div>
           <div class="field" style="flex:0 0 108px"><label>Od</label>
             <select id="n-cas-od" onchange="onCasOdChange('n')"></select></div>
           <div class="field" style="flex:0 0 88px"><label>Do</label>
@@ -642,6 +646,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="quick-btn" id="qb-storno" onclick="quickFilter('storno')">Stornované</div>
       <div class="quick-btn" id="qb-prerezerv" onclick="quickFilter('prerezerv')">Prerezerv.</div>
       <div class="quick-btn" id="qb-neplan" onclick="quickFilter('neplan')">Nenaplánované</div>
+      <div class="quick-btn" id="qb-fiktiv" onclick="quickFilter('fiktiv')" title="Neukončené objednávky s fiktívnym termínom, zoradené podľa plánu (najstaršie hore)">Fiktívne <span id="qb-fiktiv-n"></span></div>
       <div style="width:1px;height:18px;background:var(--border);margin:0 2px"></div>
       <div class="quick-btn" id="qb-dnes" onclick="quickFilter('dnes')" title="Plán = dnes">📅 Dnes</div>
       <div class="quick-btn" id="qb-zajtra" onclick="quickFilter('zajtra')" title="Plán = zajtra">📅 Zajtra</div>
@@ -1262,7 +1267,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     </div>
     <div style="display:grid;grid-template-columns:70px 1fr 108px 88px;gap:8px;padding:3px 18px">
       <div class="mfield" style="padding:0"><label>ADD</label><input type="text" id="e-add" style="text-transform:uppercase" maxlength="2"></div>
-      <div class="mfield" style="padding:0"><label>Plánovaný dátum</label><input type="date" id="e-plan"></div>
+      <div class="mfield" style="padding:0"><label>Plánovaný dátum</label><input type="date" id="e-plan"><label class="fik-chk" title="Plánovaný dátum je len fiktívny (orientačný)"><input type="checkbox" id="e-fiktiv"> Fiktív</label></div>
       <div class="mfield" style="padding:0"><label>Od</label><select id="e-cas-od" onchange="onCasOdChange('e')"></select></div>
       <div class="mfield" style="padding:0"><label>Do</label><input type="text" id="e-cas-do" readonly placeholder="auto" style="background:#f3f4f6;color:#555;cursor:default"></div>
     </div>
@@ -1347,6 +1352,7 @@ function apiToMock(o){
     balik:     o.balik||'',
     prijatia:  o.datum_prijatia||'',
     plan:      o.datum_plan||'',
+    fiktiv:    !!o.fiktiv,
     real:      o.datum_realizacie||'',
     lt:        o.lt||'',
     zdroj:     o.zdroj||'',
@@ -1411,6 +1417,7 @@ function mockToApi(o){
     balik:            o.balik||'',
     datum_prijatia:   o.prijatia||null,
     datum_plan:       o.plan||null,
+    fiktiv:           o.fiktiv===undefined ? undefined : !!o.fiktiv,
     datum_realizacie: o.real||null,
     lt:               o.lt||null,
     zdroj:            o.zdroj||'',
@@ -2230,6 +2237,7 @@ function quickFilter(mode){
     if(all && !all.checked){ all.checked=true; if(typeof msSelectAll==='function') msSelectAll(all); }
   }
   renderObjTable();
+  if(mode==='fiktiv') requestAnimationFrame(()=>{const w=document.querySelector('#page1 .tbl-wrap');if(w)w.scrollTop=0;});
 }
 function searchLive(){clearTimeout(_sTimer);_sTimer=setTimeout(renderObjTable,300);}
 // Dashboard click → úplný reset všetkých filtrov + nastav quick mód.
@@ -2575,7 +2583,7 @@ function switchTab(idx){
     // Auto-scroll na koniec – najnovšie objednávky sú dole, dispečérka ich vidí hneď
     requestAnimationFrame(()=>{
       const wrap=document.querySelector('#page1 .tbl-wrap');
-      if(wrap) wrap.scrollTop=wrap.scrollHeight;
+      if(wrap) wrap.scrollTop=quickMode==='fiktiv'?0:wrap.scrollHeight;
     });
   }
   if(idx===2){showPlan();}
@@ -3988,7 +3996,7 @@ function ai3Model(vylucId){
   const slack = { A:{}, N:{} }, slackN = { A:0, N:0 };
   for(const o of MOCK_OBJ){
     if(vylucId && o.id_obj === vylucId) continue;
-    if(!o.lt || !o.plan || !o.prijatia || o.prijatia < odCap || o.prijatia > dnes || ai3JeTzP(o)) continue;
+    if(!o.lt || !o.plan || !o.prijatia || o.fiktiv || o.prijatia < odCap || o.prijatia > dnes || ai3JeTzP(o)) continue;
     const s = kal.idxDo(o.lt) - kal.idxDo(o.plan);
     const sc = Math.max(AI3.SLACK_MIN, Math.min(AI3.SLACK_MAX, s));
     const g = (o.add_txt||'').toUpperCase()==='A' ? 'A' : 'N';
@@ -4670,6 +4678,7 @@ function zapisObjednavku(){
     typ:document.getElementById('n-typ').value.trim(),
     balik:document.getElementById('n-balik').value.trim(),
     prijatia:document.getElementById('n-prijatia').value, plan,
+    fiktiv:!!document.getElementById('n-fiktiv')?.checked,
     real:document.getElementById('n-real').value, lt,
     zdroj:document.getElementById('n-technik').value.trim(),
     add_txt, pozn, farba,
@@ -4690,7 +4699,7 @@ function zapisObjednavku(){
   else MOCK_OBJ.push(novyZaznam);
   mwfAfterZapisOk();
   toast(`✓ Zapísaná: ${idObj}`);setStatus(`✓ Zapísaná: ${idObj}`,'ok');
-  logHistoria(idObj, 'zapis', `Zápis: ${novyZaznam.meno}, ${novyZaznam.adresa}, plán: ${novyZaznam.plan||'–'}, technik: ${novyZaznam.zdroj||'–'}`);
+  logHistoria(idObj, 'zapis', `Zápis: ${novyZaznam.meno}, ${novyZaznam.adresa}, plán: ${novyZaznam.plan||'–'}${novyZaznam.fiktiv?' (fiktív)':''}, technik: ${novyZaznam.zdroj||'–'}`);
   // Email technikovi cez Outlook ak má zapnuté notifikácie
   if(novyZaznam.zdroj){
     const _nt=DEMO_USERS.find(u=>u.technik_meno===novyZaznam.zdroj&&u.technik_email_notify&&u.technik_email);
@@ -4760,6 +4769,7 @@ function _sendAiLog(event, idObj, obj){
 function vymazatFormu(){
   ['n-id','n-meno','n-adresa','n-typ','n-balik','n-add','n-pozn','n-technik','n-telefon','n-kod','n-region'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList&&el.classList.remove('add-a');}});
   ['n-lt','n-plan','n-real'].forEach(id=>document.getElementById(id).value='');
+  const nFik=document.getElementById('n-fiktiv');if(nFik)nFik.checked=false;
   const nOd=document.getElementById('n-cas-od');if(nOd)nOd.value='';
   const nDo=document.getElementById('n-cas-do');if(nDo)nDo.value='';
   document.getElementById('n-prijatia').value=T;
@@ -4778,13 +4788,14 @@ function vymazatFormu(){
 // Predchádza strate textu pri náhodnom refreshi/páde browser-u.
 // ════════════════════════════════════════════════════════════
 const DRAFT_KEY='dispecing_draft_nova_v1';
-const DRAFT_FIELDS=['n-id','n-meno','n-adresa','n-typ','n-balik','n-prijatia','n-lt','n-add','n-plan','n-technik','n-pozn','n-telefon','n-kod','n-region'];
+const DRAFT_FIELDS=['n-id','n-meno','n-adresa','n-typ','n-balik','n-prijatia','n-lt','n-add','n-plan','n-fiktiv','n-technik','n-pozn','n-telefon','n-kod','n-region'];
 let draftTimer=null,draftBanner=null;
 function draftSave(){
   try{
     const d={};let any=false;
-    DRAFT_FIELDS.forEach(id=>{const el=document.getElementById(id);if(el){d[id]=el.value||'';if(el.value&&id!=='n-prijatia')any=true;}});
+    DRAFT_FIELDS.forEach(id=>{const el=document.getElementById(id);if(el&&el.type!=='checkbox'){d[id]=el.value||'';if(el.value&&id!=='n-prijatia')any=true;}});
     d._stav=currentStavNova||'';
+    d._fiktiv=!!document.getElementById('n-fiktiv')?.checked;
     d._ts=new Date().toISOString();
     if(any) localStorage.setItem(DRAFT_KEY,JSON.stringify(d));
     else    localStorage.removeItem(DRAFT_KEY);
@@ -4823,8 +4834,9 @@ function draftRestore(){
   try{
     const raw=localStorage.getItem(DRAFT_KEY);if(!raw) return;
     const d=JSON.parse(raw);
-    DRAFT_FIELDS.forEach(id=>{const el=document.getElementById(id);if(el&&d[id]!==undefined) el.value=d[id];});
+    DRAFT_FIELDS.forEach(id=>{const el=document.getElementById(id);if(el&&el.type!=='checkbox'&&d[id]!==undefined) el.value=d[id];});
     if(d['n-add']==='A'){const a=document.getElementById('n-add');if(a) a.classList.add('add-a');}
+    {const f=document.getElementById('n-fiktiv');if(f) f.checked=!!d._fiktiv;}
     // Stav (zelené/žlté tlačidlo)
     if(d._stav){currentStavNova=d._stav;document.querySelectorAll('#n-stav-opts .stav-opt').forEach(o=>{o.classList.toggle('active',o.dataset.stav===d._stav);});}
     if(draftBanner) draftBanner.style.display='none';
@@ -5157,6 +5169,11 @@ function renderObjTable(){
   else if(quickMode==='storno')rows=rows.filter(o=>o.farba==='zlta');
   else if(quickMode==='prerezerv')rows=rows.filter(o=>o.farba==='modra');
   else if(quickMode==='neplan')rows=rows.filter(isNeplan);
+  else if(quickMode==='fiktiv'){
+    // Neukončené fiktívne – podľa plánu vzostupne (po termíne hore, potom dnes, potom budúce); bez plánu na koniec
+    rows=rows.filter(o=>o.fiktiv&&!o.real&&o.farba!=='zlta'&&o.farba!=='zelena');
+    rows.sort((a,b)=>(a.plan||'9999').localeCompare(b.plan||'9999')||(a.prijatia||'').localeCompare(b.prijatia||''));
+  }
   else if(quickMode==='oneskorene')rows=rows.filter(isOneskoren);
   else if(quickMode==='dnes'){const dnes=T;rows=rows.filter(o=>o.plan===dnes);}
   else if(quickMode==='zajtra'){const zajtra=dt(1);rows=rows.filter(o=>o.plan===zajtra&&o.farba!=='zlta');}
@@ -5223,7 +5240,7 @@ function renderObjTable(){
       <td>${o.meno||''}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${o.adresa||''}</td>
       <td>${o.typ||''}</td><td>${o.balik||''}</td>
-      <td>${fmtD(o.prijatia)}</td><td>${fmtD(o.real)}</td><td>${fmtD(o.plan)}</td>
+      <td>${fmtD(o.prijatia)}</td><td>${fmtD(o.real)}</td><td>${fmtD(o.plan)}${o.fiktiv?'<span class="fik-b" title="Fiktívny termín">F</span>':''}</td>
       <td>${o.zdroj||''}</td><td>${fmtD(o.lt)}</td>
       <td style="text-align:center;font-weight:${doLTred?'700':'400'};color:${doLTred?'var(--red)':''}">${doLTtxt}</td>
       <td>${o.add_txt||''}</td>
@@ -5253,6 +5270,8 @@ function renderObjTable(){
     ? `Zobrazených: ${rows.length} záznamov`
     : `Zobrazených: ${rows.length} z ${totalAll} (filtrované)`;
   setStatus(`Objednávky: ${rows.length} záznamov`,'ok');
+  {const fn=document.getElementById('qb-fiktiv-n');
+   if(fn){const n=MOCK_OBJ.filter(o=>o.fiktiv&&!o.real&&o.farba!=='zlta'&&o.farba!=='zelena').length;fn.textContent=n?`(${n})`:'';}}
   bulkUpdateBar(); // aktualizuj počet označených v bulk-bare
 }
 
@@ -5548,7 +5567,7 @@ const LockManager = {
   // ───── Internal UI ─────
   _setReadOnlyUI(ro){
     // Disable všetky inputy v edit modali pri read-only, alebo ich uvoľní
-    const ids = ['e-meno','e-adresa','e-typ','e-balik','e-prijatia','e-lt','e-add','e-plan','e-technik','e-pozn','e-telefon','e-region','e-real'];
+    const ids = ['e-meno','e-adresa','e-typ','e-balik','e-prijatia','e-lt','e-add','e-plan','e-fiktiv','e-technik','e-pozn','e-telefon','e-region','e-real'];
     ids.forEach(id => {
       const el = document.getElementById(id);
       if(el){
@@ -5644,7 +5663,7 @@ function otvorEditModal(id_obj){
   // Snapshot pre diff histórie
   editOrigObj={meno:o.meno||'',adresa:o.adresa||'',typ:o.typ||'',balik:o.balik||'',
     prijatia:o.prijatia||'',lt:o.lt||'',add_txt:o.add_txt||'',plan:o.plan||'',
-    zdroj:o.zdroj||'',pozn:o.pozn||'',telefon:o.telefon||'',real:o.real||''};
+    zdroj:o.zdroj||'',pozn:o.pozn||'',telefon:o.telefon||'',real:o.real||'',fiktiv:!!o.fiktiv};
   editStav=stavFromFarba(o.farba);
   document.getElementById('e-id').value=o.id_obj;
   document.getElementById('e-meno').value=o.meno||'';
@@ -5656,6 +5675,7 @@ function otvorEditModal(id_obj){
   document.getElementById('e-lt').value=o.lt||'';
   document.getElementById('e-add').value=o.add_txt||'';
   document.getElementById('e-plan').value=o.plan||'';
+  {const f=document.getElementById('e-fiktiv');if(f)f.checked=!!o.fiktiv;}
   _casOdSel('e');
   const eOd=document.getElementById('e-cas-od');
   if(eOd)eOd.value=o.cas_od||'';
@@ -5767,6 +5787,7 @@ function saveEdit(){
   o.typ=document.getElementById('e-typ').value;o.balik=document.getElementById('e-balik').value;
   o.prijatia=document.getElementById('e-prijatia').value;o.lt=lt;o.add_txt=add_txt;
   o.plan=plan;o.zdroj=document.getElementById('e-technik').value;o.pozn=pozn;
+  o.fiktiv=!!document.getElementById('e-fiktiv')?.checked;
   o.telefon=document.getElementById('e-telefon').value.trim();
   o.kod_aktivity=document.getElementById('e-kod').value.trim();
   o.region=(document.getElementById('e-region')?.value||'').trim().toUpperCase();
@@ -5816,6 +5837,8 @@ function saveEdit(){
     const _ost=_ostF.filter(f=>(editOrigObj[f]||'')!==(o[f]||'')).map(f=>`${_ostL[f]}: „${editOrigObj[f]||'–'}" → „${o[f]||'–'}"`);
     if(_ost.length) logHistoria(editCurrentId,'zmena',_ost.join('; '));
   }
+  if(editOrigObj && editOrigObj.fiktiv!==o.fiktiv)
+    logHistoria(editCurrentId,'zmena',o.fiktiv?'Fiktív: zapnutý':'Fiktív: zrušený');
   patchObj(editCurrentId, mockToApi(o));
   // AI log pre EDIT – iba ak sa zmenil technik alebo plán oproti pôvodu.
   // Edit môže byť reakcia na realitu (zákazník chce iný termín), takže ho logujeme s event='edit'
