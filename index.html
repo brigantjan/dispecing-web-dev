@@ -2,7 +2,7 @@
 <html lang="sk">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="v33">
+<meta name="app-version" content="v34">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <!-- Zakáz cachovania – vždy načítaj čerstvú verziu -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -282,6 +282,13 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .nep-tbl th.nep-dnes{box-shadow:inset 0 -3px 0 var(--accent)}
 .nep-tbl td.nep-D{background:#ffcdd2;color:#b71c1c}
 .nep-tbl td.nep-PN{background:#e1bee7;color:#6a1b9a}
+.nep-tbl td.nep-D1,.nep-sw.nep-D1{background:linear-gradient(90deg,#ffcdd2 50%,#fff 50%);color:#b71c1c}
+.nep-tbl td.nep-D2,.nep-sw.nep-D2{background:linear-gradient(90deg,#fff 50%,#ffcdd2 50%);color:#b71c1c}
+.nep-tbl td.nep-D1.nep-we,.nep-tbl td.nep-D2.nep-we{opacity:.7}
+/* v34: ½ dňa v kapacite + zlé meno technika */
+.cap-tbl td.polden{background-image:linear-gradient(135deg,rgba(255,205,210,.95) 0 34%,transparent 34%)}
+.cap-tbl td.polden.d2{background-image:linear-gradient(315deg,rgba(255,205,210,.95) 0 34%,transparent 34%)}
+input.tech-zly{border-color:#dc2626!important;background:#fef2f2!important}
 .nep-tbl td.nep-dlh{background:repeating-linear-gradient(45deg,#ffebee,#ffebee 4px,#fff 4px,#fff 8px);color:#b71c1c;cursor:not-allowed}
 .nep-tbl td.nep-ob::after{content:'';position:absolute;right:3px;top:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .nep-tbl td.nep-sel{outline:3px solid #f59e0b!important;outline-offset:-3px}
@@ -598,11 +605,11 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             <label class="fik-chk" title="Plánovaný dátum je len fiktívny (orientačný)"><input type="checkbox" id="n-fiktiv"> Fiktív</label></div>
           <div class="field" style="flex:0 0 108px"><label>Od</label>
             <select id="n-cas-od" onchange="onCasOdChange('n')"></select></div>
-          <div class="field" style="flex:0 0 88px"><label>Do</label>
-            <input type="text" id="n-cas-do" readonly placeholder="auto" style="background:#f3f4f6;color:#555;cursor:default"></div>
+          <div class="field" style="flex:0 0 112px"><label>Do</label>
+            <select id="n-cas-do" title="Automaticky +2 h – dá sa zmeniť na dlhšie okno"></select></div>
         </div>
         <div class="field"><label>Pracovný zdroj</label>
-          <input type="text" id="n-technik" list="dl-technik" placeholder="Vyberte alebo napíšte..." onblur="this.value=this.value.trim()" autocomplete="off">
+          <input type="text" id="n-technik" list="dl-technik" placeholder="Vyberte zo zoznamu..." onblur="techOpravPole(this)" oninput="this.classList.remove('tech-zly')" autocomplete="off">
           <datalist id="dl-technik"></datalist>
         </div>
         <div class="field"><label>Telefón zákazníka</label>
@@ -1089,12 +1096,16 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
         <span id="nep-rezimy" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px">
           <span style="font-size:12px;font-weight:600;color:var(--text2)">Klik zapisuje:</span>
           <button class="btn btn-outline btn-xs" data-r="D" onclick="nepNastavRezim('D')">🏖️ Dovolenka</button>
+          <button class="btn btn-outline btn-xs" data-r="D1" onclick="nepNastavRezim('D1')" title="Dovolenka doobeda 07:00–11:00">🌅 ½ doobeda</button>
+          <button class="btn btn-outline btn-xs" data-r="D2" onclick="nepNastavRezim('D2')" title="Dovolenka poobede 11:00–15:30">🌇 ½ poobede</button>
           <button class="btn btn-outline btn-xs" data-r="PN" onclick="nepNastavRezim('PN')">🤒 PN</button>
           <button class="btn btn-outline btn-xs" data-r="X" onclick="nepNastavRezim('X')">🧽 Zmazať</button>
         </span>
       </div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">
         <span class="nep-leg"><span class="nep-sw" style="background:#ffcdd2;color:#b71c1c">D</span>dovolenka</span>
+        <span class="nep-leg"><span class="nep-sw nep-D1">½</span>½ doobeda (07:00–11:00)</span>
+        <span class="nep-leg"><span class="nep-sw nep-D2">½</span>½ poobede (11:00–15:30)</span>
         <span class="nep-leg"><span class="nep-sw" style="background:#e1bee7;color:#6a1b9a">PN</span>PN</span>
         <span class="nep-leg"><span class="nep-sw" style="background:repeating-linear-gradient(45deg,#ffebee,#ffebee 4px,#fff 4px,#fff 8px)"></span>od–do (tabuľka nižšie)</span>
         <span class="nep-leg"><span class="nep-sw" style="background:#ffe8cc"></span>sviatok</span>
@@ -1306,9 +1317,9 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="mfield" style="padding:0"><label>ADD</label><input type="text" id="e-add" style="text-transform:uppercase" maxlength="2"></div>
       <div class="mfield" style="padding:0"><label>Plánovaný dátum</label><input type="date" id="e-plan"><label class="fik-chk" title="Plánovaný dátum je len fiktívny (orientačný)"><input type="checkbox" id="e-fiktiv"> Fiktív</label></div>
       <div class="mfield" style="padding:0"><label>Od</label><select id="e-cas-od" onchange="onCasOdChange('e')"></select></div>
-      <div class="mfield" style="padding:0"><label>Do</label><input type="text" id="e-cas-do" readonly placeholder="auto" style="background:#f3f4f6;color:#555;cursor:default"></div>
+      <div class="mfield" style="padding:0"><label>Do</label><select id="e-cas-do" title="Automaticky +2 h – dá sa zmeniť na dlhšie okno"></select></div>
     </div>
-    <div class="mfield"><label>Pracovný zdroj</label><input type="text" id="e-technik" list="dl-technik" autocomplete="off"></div>
+    <div class="mfield"><label>Pracovný zdroj</label><input type="text" id="e-technik" list="dl-technik" placeholder="Vyberte zo zoznamu..." onblur="techOpravPole(this)" oninput="this.classList.remove('tech-zly')" autocomplete="off"></div>
     <div class="mfield"><label>Telefón zákazníka</label>
       <div style="display:flex;gap:6px;align-items:stretch">
         <input type="tel" id="e-telefon" placeholder="0911 234 567" autocomplete="off" style="flex:1.6;min-width:0">
@@ -1670,6 +1681,23 @@ async function loadNepritomnost(){
   }catch(e){ console.warn('Neprítomnosť:', e.message); return false; }
 }
 // Typ neprítomnosti v deň: 'D' | 'PN' | '' (kalendár má prednosť pred rozsahom od–do)
+// v34: polovica dňa dovolenky – D1 = doobeda, D2 = poobede (technik v ten deň pracuje druhú polovicu)
+const NEP_POLDEN = { D1: { od: '07:00', do: '11:00', nazov: 'doobeda' }, D2: { od: '11:00', do: '15:30', nazov: 'poobede' } };
+function nepPolden(meno, iso){ const t = nepTyp(meno, iso); return (t === 'D1' || t === 'D2') ? t : ''; }
+function nepPoldenText(t){ const p = NEP_POLDEN[t]; return p ? `½ dňa dovolenky ${p.nazov} (${p.od}–${p.do})` : ''; }
+// Zasahuje časové okno do polovice dňa dovolenky? Vráti chybovú hlášku alebo ''.
+function nepPoldenKonflikt(meno, iso, od, doo){
+  const t = nepPolden(meno, iso); if(!t || !od) return '';
+  const p = NEP_POLDEN[t], a = _casMin(od), b = doo ? _casMin(doo) : a + 120;
+  if(a < _casMin(p.do) && _casMin(p.od) < b)
+    return `⛔ ${meno} má ${fmtD(iso)} ${nepPoldenText(t)}. Okno ${od}–${doo||'?'} do nej zasahuje – ` +
+           (t === 'D1' ? `zvoľ čas od ${p.do}.` : `okno musí skončiť najneskôr o ${p.od}.`);
+  return '';
+}
+function nepPoldenUpozornenie(meno, iso, od){
+  const t = nepPolden(meno, iso); if(!t || od) return '';
+  return `⚠ ${meno} má ${fmtD(iso)} ${nepPoldenText(t)} – zvážte časové okno.`;
+}
 function nepTyp(meno, iso){
   const t = NEPRITOMNOST[meno];
   return (t && t[iso]) || '';
@@ -1691,9 +1719,12 @@ function nepMesiacPosun(k){
 function nepNastavRezim(r){ NEP_REZIM = r; renderNepKalendar(); }
 
 // Naplánovaná práca technika v deň (nedokončené balíčky + poruchy načítané do kapacity)
-function nepPracaVDen(meno, iso){
-  const obj = MOCK_OBJ.filter(o => o.zdroj === meno && o.plan === iso && !o.real && o.farba !== 'zlta')
-    .map(o => `📦 ${o.id_obj} · ${o.adresa || ''}`.trim());
+function nepPracaVDen(meno, iso, typ){
+  const p = NEP_POLDEN[typ];
+  const zasahuje = o => !p || !o.cas_od || (_casMin(o.cas_od) < _casMin(p.do) && _casMin(p.od) < (o.cas_do ? _casMin(o.cas_do) : _casMin(o.cas_od) + 120));
+  const obj = MOCK_OBJ.filter(o => o.zdroj === meno && o.plan === iso && !o.real && o.farba !== 'zlta' && zasahuje(o))
+    .map(o => `📦 ${o.id_obj} · ${o.cas_od ? o.cas_od + '–' + (o.cas_do || '') + ' · ' : ''}${o.adresa || ''}`.trim());
+  if(p) return obj;   // v34: pri ½ dňa poruchy neblokujú (technik v ten deň pracuje)
   const por = (typeof porZoznamPreDen === 'function' ? porZoznamPreDen(meno, iso) : [])
     .map(p => `🔧 ${p.externe_id || 'porucha'} · ${p.adresa || ''}`.trim());
   return obj.concat(por);
@@ -1737,13 +1768,14 @@ function renderNepKalendar(){
     dni.forEach(x => {
       const typ = nepTyp(meno, x.iso);
       const dlh = !typ && nepDlhodoba(meno, x.iso);
-      if((typ || dlh) && !x.we && !x.sv) n++;
-      const praca = !typ && !dlh && nepPracaVDen(meno, x.iso).length > 0;
+      if((typ || dlh) && !x.we && !x.sv) n += (typ === 'D1' || typ === 'D2') ? 0.5 : 1;
+      const praca = (!typ || NEP_POLDEN[typ]) && !dlh && nepPracaVDen(meno, x.iso).length > 0;
       const cls = ['nep-c', typ ? 'nep-' + typ : dlh ? 'nep-dlh' : x.sv ? 'nep-sv' : x.we ? 'nep-we' : '', praca ? 'nep-ob' : ''].join(' ');
-      const tip = dlh ? 'Dlhodobá neprítomnosť (od–do) – mení sa v tabuľke nižšie' : '';
-      h += `<td class="${cls}" data-uid="${t.id}" data-iso="${x.iso}"${tip ? ` title="${tip}"` : ''}>${typ || (dlh ? 'D' : '')}</td>`;
+      const tip = dlh ? 'Dlhodobá neprítomnosť (od–do) – mení sa v tabuľke nižšie' : (NEP_POLDEN[typ] ? nepPoldenText(typ) : '');
+      const txt = NEP_POLDEN[typ] ? '½' : (typ || (dlh ? 'D' : ''));
+      h += `<td class="${cls}" data-uid="${t.id}" data-iso="${x.iso}"${tip ? ` title="${tip}"` : ''}>${txt}</td>`;
     });
-    h += `<td class="nep-sum">${n ? n + ' d' : ''}</td></tr>`;
+    h += `<td class="nep-sum">${n ? String(n).replace('.', ',') + ' d' : ''}</td></tr>`;
   });
   h += '</tbody></table>';
   host.innerHTML = h;
@@ -1796,7 +1828,7 @@ function nepCelyMesiac(uid){
 async function nepUlozZmeny(ciel){
   // Upozornenie: technik má v označené dni naplánovanú prácu
   const konf = [];
-  ciel.filter(z => z.typ).forEach(z => nepPracaVDen(z.meno, z.iso).forEach(p => konf.push(`${z.meno} – ${fmtD(z.iso)}: ${p}`)));
+  ciel.filter(z => z.typ).forEach(z => nepPracaVDen(z.meno, z.iso, z.typ).forEach(p => konf.push(`${z.meno} – ${fmtD(z.iso)}${NEP_POLDEN[z.typ] ? ' (½ ' + NEP_POLDEN[z.typ].nazov + ')' : ''}: ${p}`)));
   if(konf.length){
     const txt = konf.slice(0, 15).join('\n') + (konf.length > 15 ? `\n… a ďalšie (${konf.length - 15})` : '');
     if(!confirm(`⚠ Technik má v označené dni naplánovanú prácu:\n\n${txt}\n\nZapísať neprítomnosť? Tieto objednávky a poruchy treba preplánovať.`)){ renderNepKalendar(); return; }
@@ -2185,14 +2217,12 @@ function bulkPriraditTechnika(){
   if(!bulkSelected.size){toast('⚠ Žiadne objednávky označené');return;}
   // Použijeme rovnaký zoznam technikov ako pri Hromadnej zmene
   const fromUsers=(DEMO_USERS||[]).filter(u=>u.rola==='technik').map(u=>u.technik_meno||u.meno).filter(Boolean);
-  const fromMockAll=[...new Set(MOCK_OBJ.map(o=>o.zdroj).filter(Boolean))];
-  const all=[...new Set([...(TECHNICI||[]),...fromUsers,...fromMockAll])].sort();
-  const novy=prompt(`Priradiť ${bulkSelected.size} označených objednávok technikovi:\n\nDostupní technici:\n${all.join(', ')}\n\nZadajte meno technika (presne):`,'');
+  const all=techOficialni();
+  const novy=prompt(`Priradiť ${bulkSelected.size} označených objednávok technikovi:\n\nTechnici v zozname:\n${all.join(', ')}\n\nZadajte meno technika:`,'');
   if(!novy) return;
-  const novyTrim=novy.trim();
-  if(!all.includes(novyTrim)){
-    if(!confirm(`Technik „${novyTrim}" nie je v zozname evidovaných.\nNapriek tomu pokračovať a priradiť?`))return;
-  }
+  // v34: len technik zo zoznamu (preklep bez diakritiky sa opraví, ak je jednoznačný)
+  const novyTrim=techOficialneMeno(novy);
+  if(!novyTrim){ toast(`⛔ Technik „${novy.trim()}" nie je v zozname. Nového technika zakladá admin.`, 5000); return; }
   // Aplikuj zmenu lokálne aj na backend
   const ids=[...bulkSelected];
   let changed=0, preskocene=[];
@@ -2725,12 +2755,37 @@ function initApp(){
   // Auto-backup – spustí sa raz za 22h, ticho stiahne .xlsx do Stiahnutých
   autoBackupCheck();
 }
+// v34: technika vyberá dispečérka LEN zo zoznamu, ktorý spravuje admin (users s rolou technik).
+// Mená zo starých objednávok (preklepy typu „Belak" / „Belák Adam") sa už do výberu nedostanú.
+function techOficialni(){
+  const fromUsers=(DEMO_USERS||[]).filter(u=>u.rola==='technik' && (u.aktivny===undefined||u.aktivny==1)).map(u=>u.technik_meno||u.meno).filter(Boolean);
+  return [...new Set([...(TECHNICI||[]),...fromUsers])].sort((a,b)=>a.localeCompare(b,'sk'));
+}
+const _techNorm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+// Napísané meno → oficiálne meno: presná zhoda, zhoda bez diakritiky/medzier, alebo jednoznačný začiatok
+// („belak" → „Belák Adam"). Vráti '' ak sa nedá jednoznačne určiť.
+function techOficialneMeno(meno){
+  const m=String(meno||'').trim(); if(!m) return '';
+  const L=techOficialni(); if(L.includes(m)) return m;
+  const n=_techNorm(m);
+  const rovnake=L.filter(t=>_techNorm(t)===n); if(rovnake.length===1) return rovnake[0];
+  const zac=L.filter(t=>_techNorm(t).startsWith(n)); if(zac.length===1 && n.length>=3) return zac[0];
+  return '';
+}
+// Kontrola pred uložením. Prázdny technik je OK. Ak zoznam nie je načítaný (výpadok API), neblokuje.
+function techChyba(meno){
+  const m=String(meno||'').trim(); if(!m || !techOficialni().length) return '';
+  if(techOficialni().includes(m)) return '';
+  return `⛔ Technik „${m}" nie je v zozname. Vyber technika zo zoznamu – nového technika zakladá admin.`;
+}
+function techOpravPole(el){
+  if(!el) return; el.value=el.value.trim().replace(/\s+/g,' ');
+  const o=techOficialneMeno(el.value); if(o) el.value=o;
+  el.classList.toggle('tech-zly', !!el.value && !!techChyba(el.value));
+}
 function fillTechDatalist(){
-  // Technici = z API (TECHNICI) + DEMO_USERS technici + unikátne hodnoty zo zdroj stĺpca
   const dlT=document.getElementById('dl-technik');
-  const fromUsers=(DEMO_USERS||[]).filter(u=>u.rola==='technik').map(u=>u.technik_meno||u.meno).filter(Boolean);
-  const all=[...new Set([...(TECHNICI||[]),...fromUsers,...MOCK_OBJ.map(o=>o.zdroj).filter(Boolean)])].sort();
-  dlT.innerHTML=all.map(t=>`<option>${t}</option>`).join('');
+  dlT.innerHTML=techOficialni().map(t=>`<option>${t}</option>`).join('');
   // Typy z objednávok
   const dlTyp=document.getElementById('dl-typ');
   if(dlTyp){
@@ -3128,8 +3183,7 @@ function mwfZapis(idx){
       const _odEl=document.getElementById('n-cas-od');
       if(_odEl){ _odEl.value=it.cas_od; onCasOdChange('n'); }
       // Auto-vyplnené cas_do prepíšeme presnou hodnotou z PDF (môže byť netypicky 2h)
-      const _doEl=document.getElementById('n-cas-do');
-      if(_doEl && it.cas_do){ _doEl.value=it.cas_do; }
+      if(it.cas_do) casDoNastav('n', it.cas_do);
     }
     const _poznEl=document.getElementById('n-pozn');
     if(_poznEl){
@@ -3439,7 +3493,8 @@ function aiMinPlanDate(nowHour){
 
 // Test, či je technik dostupný v daný plánovaný deň (zohľadňuje dovolenku/PN)
 function aiTechnikDostupny(meno, planIso){
-  if(nepTyp(meno, planIso)) return false;   // v31: deň v kalendári neprítomnosti (D / PN)
+  const _nt = nepTyp(meno, planIso);
+  if(_nt === 'D' || _nt === 'PN') return false;   // v31: celý deň neprítomný; v34: ½ dňa (D1/D2) = dostupný
   const td = TECHNICI_DETAIL[meno];
   if(!td) return true;
   if(!td.na_dovolenke) return true;
@@ -4090,7 +4145,8 @@ const AI3_PRIZNAKY = ['pref','slack','d0','d1','d2','d3','d4','d5','d6','dX','po
 function ai3Naklad(model, pref, m, den, okres, ltIso, isAdd, sDnom, iMin){
   const tim = (TECHNICI_DETAIL[m]?.tim_velkost) || 1;
   const zataz = ai3Zataz(model, m, den);
-  const kap = model.kapacita[m];
+  const _pol = nepPolden(m, den);
+  const kap = _pol ? Math.max(1, model.kapacita[m] / 2) : model.kapacita[m];   // v34: ½ dňa dovolenky = ½ kapacity
   const pomer = (zataz + 1) / kap;
   const okr = model.okresDen[m]?.[den];
   // odstup v pracovných dňoch od DNEŠKA (nie od najskoršieho možného dňa) – zvyklosť dispečeriek
@@ -4110,13 +4166,14 @@ function ai3Naklad(model, pref, m, den, okres, ltIso, isAdd, sDnom, iMin){
   };
   let skore = 0;
   for(const k of AI3_PRIZNAKY) skore += (AI3.W[k]||0) * f[k];
-  return { technik: m, plan: den, skore, f, eff: zataz / tim, zataz, kap, p: pref[m],
-           geo: f.geoRovnaky ? -1 : (f.geoIny ? 1 : 0), nep: model.nepritomny[m] };
+  return { technik: m, plan: den, skore, f, eff: zataz / tim, zataz, kap: Math.round(kap*10)/10, p: pref[m],
+           geo: f.geoRovnaky ? -1 : (f.geoIny ? 1 : 0), nep: model.nepritomny[m], pol: _pol };
 }
 
 function ai3Zataz(model, m, den){ return (model.zataz[m] && model.zataz[m][den]) || 0; }
 function ai3Plny(model, m, den){
-  return ai3Zataz(model, m, den) / ((TECHNICI_DETAIL[m]?.tim_velkost)||1) >= AI_CONFIG.HARD_MAX;
+  const lim = AI_CONFIG.HARD_MAX * (nepPolden(m, den) ? 0.5 : 1);   // v34: ½ dňa dovolenky
+  return ai3Zataz(model, m, den) / ((TECHNICI_DETAIL[m]?.tim_velkost)||1) >= lim;
 }
 
 function ai3Softmax(zoznam){
@@ -4135,6 +4192,7 @@ function ai3Dovody(v, typ, balik, okres){
   if(v.geo < 0) d.push(`v ten deň už má ${okres}`);
   if(v.geo > 0) d.push(`v ten deň má iný okres`);
   if(v.nep) d.push(`⚠ dlhšie bez práce – over dostupnosť`);
+  if(v.pol) d.push(`½ dňa dovolenka ${NEP_POLDEN[v.pol].nazov}`);
   return d;
 }
 
@@ -4418,30 +4476,34 @@ function aiTimeWindow(technik, planIso){
   // Veľkosť tímu – slot pojme toľko objednávok súčasne
   const tim = (TECHNICI_DETAIL[technik]||{}).tim_velkost || 1;
 
+  // v34: ½ dňa dovolenky – doobeda (07:00–11:00) → okno od 11:00; poobede (11:00–15:30) → okno musí skončiť do 11:00
+  const _pol = nepPolden(technik, planIso);
+  const _base = _pol==='D1' ? _parseMin(NEP_POLDEN.D1.do) : BASE_MIN;
+  const _koniecMax = _pol==='D2' ? _parseMin(NEP_POLDEN.D2.od) : Infinity;
+
   const existing=MOCK_OBJ.filter(o=>
     o.zdroj===technik && o.plan===planIso && !o.real && o.farba!=='zlta'
   );
 
-  if(!existing.length){
-    return {cas_od:_fmt(BASE_MIN), cas_do:_fmt(BASE_MIN+DURATION)};
-  }
-
-  // Počet objednávok na každej pozícii (option B – hľadá prvú voľnú medzeru)
+  // Počet objednávok na každej pozícii (prvá voľná medzera). v34: dlhšie okno (napr. 5 h)
+  // obsadí všetky sloty, s ktorými sa prekrýva; objednávka bez času zaberie slot 0.
   const posCount={};
   for(const o of existing){
-    let pos=0;
     if(o.cas_od){
-      pos=Math.round((_parseMin(o.cas_od)-BASE_MIN)/SLOT_STEP);
-      if(pos<0) pos=0;
-    }
-    posCount[pos]=(posCount[pos]||0)+1;
+      const a=_parseMin(o.cas_od), b=o.cas_do?_parseMin(o.cas_do):a+DURATION;
+      for(let p=0;p<20;p++){
+        const s=_base+p*SLOT_STEP;
+        if(s<b && a<s+DURATION) posCount[p]=(posCount[p]||0)+1;
+      }
+    } else posCount[0]=(posCount[0]||0)+1;
   }
 
   // Prvý slot kde počet objednávok < tim_velkost
   let pos=0;
   while((posCount[pos]||0)>=tim) pos++;
 
-  const startMin=BASE_MIN+pos*SLOT_STEP;
+  const startMin=_base+pos*SLOT_STEP;
+  if(startMin+DURATION>_koniecMax) return {cas_od:'',cas_do:''};   // ½ dňa: dopoludnie je plné – nech rozhodne dispečérka
   return {cas_od:_fmt(startMin), cas_do:_fmt(startMin+DURATION)};
 }
 
@@ -4699,7 +4761,19 @@ function zapisObjednavku(){
   const plan=document.getElementById('n-plan').value;
   // Dovolenka: technikovi s dovolenkou v plánovaný deň nesmie ísť objednávka (okrem hotová/storno).
   {
+    techOpravPole(document.getElementById('n-technik'));
     const _tech=document.getElementById('n-technik').value.trim();
+    const _tch=techChyba(_tech);
+    if(_tch){ toast(_tch, 5000); setStatus('Technik nie je v zozname – objednávka nezapísaná','err'); document.getElementById('n-technik').focus(); return; }
+    _casOdSel('n');
+    const _od=(document.getElementById('n-cas-od')||{}).value||'', _do=(document.getElementById('n-cas-do')||{}).value||'';
+    const _cch=casOknoChyba(_od,_do);
+    if(_cch){ toast(_cch, 5000); document.getElementById('n-cas-do').focus(); return; }
+    if(currentStavNova!=='hotova' && currentStavNova!=='storno'){
+      const _pk=nepPoldenKonflikt(_tech, plan, _od, _do);
+      if(_pk){ toast(_pk, 6000); setStatus('Časové okno zasahuje do dovolenky','err'); document.getElementById('n-cas-od').focus(); return; }
+      const _pu=nepPoldenUpozornenie(_tech, plan, _od); if(_pu) toast(_pu, 6000);
+    }
     if(currentStavNova!=='hotova' && currentStavNova!=='storno' && technikMaDovolenkuVDen(_tech, plan)){
       toast(msgDovolenka(_tech, plan));
       setStatus('Technik má dovolenku – objednávka nezapísaná','err');
@@ -4821,7 +4895,7 @@ function vymazatFormu(){
   ['n-lt','n-plan','n-real'].forEach(id=>document.getElementById(id).value='');
   const nFik=document.getElementById('n-fiktiv');if(nFik){nFik.disabled=false;nFik.checked=false;_fikSync('n','');}
   const nOd=document.getElementById('n-cas-od');if(nOd)nOd.value='';
-  const nDo=document.getElementById('n-cas-do');if(nDo)nDo.value='';
+  casDoNastav('n','');
   document.getElementById('n-prijatia').value=T;
   document.querySelectorAll('#n-stav-opts .stav-opt').forEach(o=>o.className='stav-opt');
   currentStavNova='';aiDone=false;pendingDup=null;
@@ -5011,14 +5085,15 @@ function renderCapTbl(f,t){
       const a=grid[tc]&&grid[tc][d]?grid[tc][d]:[];const v=a.length;
       const naDov=isTechnikNaDovolenke(tc,d);
       const _pn=naDov && nepTyp(tc,d)==='PN';
+      const _pol=!naDov && nepPolden(tc,d);   // v34: ½ dňa dovolenky
       // Poruchy v ten deň (z databázy Porúch). Farba bunky počíta záťaž v + PORUCHA_VAHA×p.
       const por=porZoznamPreDen(tc,d);const p=por.length;
       const zat=v+PORUCHA_VAHA*p;
-      // Prahy sa násobia tim_velkost (Weiss tim=5 → ≤20 zel, ≤45 oranž, >45 červ)
-      const prahZ=4*tim, prahO=9*tim;
+      // Prahy sa násobia tim_velkost (Weiss tim=5 → ≤20 zel, ≤45 oranž, >45 červ); ½ dňa = polovičné prahy
+      const _k=_pol?0.5:1, prahZ=4*tim*_k, prahO=9*tim*_k;
       const cls=naDov
         ? (vs?'wknd-col ':'')+'dovolenka'+(_pn?' pn':'')
-        : (vs?'wknd-col ':'')+( zat===0?'c0':zat<=prahZ?'c14':zat<=prahO?'c59':'c10');
+        : (vs?'wknd-col ':'')+( zat===0?'c0':zat<=prahZ?'c14':zat<=prahO?'c59':'c10')+(_pol?' polden'+(_pol==='D2'?' d2':''):'');
       // Tooltip: pri tíme dopočítaj priemer/technik
       let tip=naDov?(_pn?'Technik je PN':'Technik je na dovolenke')+(a.length?`\n\n${v} obj. plánovaných na tento deň:\n${a.join('\n')}`:''):a.join('\n');
       if(p){
@@ -5029,6 +5104,7 @@ function renderCapTbl(f,t){
         const priemer=(v/tim).toFixed(1);
         tip=`${v} obj. v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
       }
+      if(_pol) tip=`🏖️ ${nepPoldenText(_pol)}${tip?'\n'+tip:''}`;
       h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?(_pn?'PN':'D'):(p?`${v}<span style="color:#b91c1c;font-weight:700"> +🔧${p}</span>`:(v||'—'))}</td>`;
     });h+=`</tr>`;
   });
@@ -5731,7 +5807,7 @@ function otvorEditModal(id_obj){
   _casOdSel('e');
   const eOd=document.getElementById('e-cas-od');
   if(eOd)eOd.value=o.cas_od||'';
-  document.getElementById('e-cas-do').value=o.cas_do||'';
+  casDoNastav('e', o.cas_do||'');
   document.getElementById('e-technik').value=o.zdroj||'';
   document.getElementById('e-pozn').value=o.pozn||'';
   document.getElementById('e-telefon').value=o.telefon||'';
@@ -5806,7 +5882,23 @@ function saveEdit(){
   // Dovolenka: blokuj, ak sa technik alebo dátum mení a výsledný technik má v ten deň dovolenku.
   // Úprava objednávky bez zmeny technika/dátumu (napr. poznámka) zostáva povolená.
   {
+    techOpravPole(document.getElementById('e-technik'));
     const _tech=(document.getElementById('e-technik').value||'').trim();
+    // v34: technik zo zoznamu – kontroluje sa len pri ZMENE technika (staré objednávky s iným menom sa dajú upraviť)
+    if(_tech!==(editOrigTechnik||'')){
+      const _tch=techChyba(_tech);
+      if(_tch){ w.style.display='block'; w.textContent=_tch; toast(_tch, 5000); return; }
+    }
+    const _od=document.getElementById('e-cas-od')?.value||'', _do=document.getElementById('e-cas-do')?.value||'';
+    const _cch=casOknoChyba(_od,_do);
+    if(_cch){ w.style.display='block'; w.textContent=_cch; toast(_cch, 5000); return; }
+    const _oo=MOCK_OBJ[oi]||{};
+    const _zmenaCasu=_tech!==(editOrigTechnik||'') || (plan||'')!==(editOrigPlan||'') || _od!==(_oo.cas_od||'') || _do!==(_oo.cas_do||'');
+    if(_zmenaCasu && editStav!=='hotova' && editStav!=='storno'){
+      const _pk=nepPoldenKonflikt(_tech, plan, _od, _do);
+      if(_pk){ w.style.display='block'; w.textContent=_pk; toast(_pk, 6000); return; }
+      const _pu=nepPoldenUpozornenie(_tech, plan, _od); if(_pu) toast(_pu, 6000);
+    }
     const _zmena=(_tech!==(editOrigTechnik||'')) || ((plan||'')!==(editOrigPlan||''));
     if(_zmena && editStav!=='hotova' && editStav!=='storno' && technikMaDovolenkuVDen(_tech, plan)){
       w.style.display='block'; w.textContent=msgDovolenka(_tech, plan);
@@ -7089,8 +7181,7 @@ function otvorHromadnaZmena(){
   //  3) všetky uniq zdroje z MOCK_OBJ (zachytí aj historických technikov mimo users)
   //  4) technikoviaDna (vždy obsiahnutí)
   const fromUsers=(DEMO_USERS||[]).filter(u=>u.rola==='technik').map(u=>u.technik_meno||u.meno).filter(Boolean);
-  const fromMockAll=[...new Set(MOCK_OBJ.map(o=>o.zdroj).filter(Boolean))];
-  const vsetciTech=[...new Set([...(TECHNICI||[]),...fromUsers,...fromMockAll,...technikoviaDna])].sort();
+  const vsetciTech=techOficialni();   // v34: presúvať sa dá len na technika zo zoznamu
   // Z technika = obmedzene; Na technika = všetci
   const optsZ =technikoviaDna.map(t=>`<option>${t}</option>`).join('');
   const optsNa=vsetciTech    .map(t=>technikMaDovolenkuVDen(t, datum)
@@ -7146,10 +7237,27 @@ function addTwoHours(t){
   const tot=h*60+m+120;
   return `${String(Math.floor(tot/60)).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`;
 }
+// v34: „Do" je výber – po zvolení „Od" sa nastaví +2 h, dispečérka ho môže predĺžiť (napr. na 4–5 h)
+const CAS_DO_MAX='21:00';
+function _casMin(t){ const[h,m]=String(t||'').split(':').map(Number); return (h||0)*60+(m||0); }
+function _casFmt(n){ return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`; }
+// Naplní výber „Do" časmi po „Od" (krok 30 min) a nastaví hodnotu; cudziu hodnotu (napr. z PDF 10:15) zachová
+function casDoNastav(prefix, val){
+  const s=document.getElementById(prefix+'-cas-do'); if(!s) return;
+  const od=(document.getElementById(prefix+'-cas-od')||{}).value||'';
+  const casy=[];
+  if(od) for(let t=_casMin(od)+30; t<=_casMin(CAS_DO_MAX); t+=30) casy.push(_casFmt(t));
+  if(val && !casy.includes(val)){ casy.push(val); casy.sort(); }
+  s.innerHTML='<option value="">—</option>'+casy.map(t=>{
+    const d=od?_casMin(t)-_casMin(od):0, hod=d/60;
+    const lab=od&&d>0?` (${String(hod).replace('.',',')} h)`:'';
+    return `<option value="${t}">${t}${lab}</option>`;}).join('');
+  s.value=val||'';
+  s.disabled=!od;
+}
 function onCasOdChange(prefix){
   const od=(document.getElementById(prefix+'-cas-od')||{}).value||'';
-  const doFld=document.getElementById(prefix+'-cas-do');
-  if(doFld)doFld.value=od?addTwoHours(od):'';
+  casDoNastav(prefix, od?addTwoHours(od):'');
 }
 function checkCasOverlap(technik,plan,casOd,casDo,excludeId){
   if(!casOd||!technik||!plan)return null;
@@ -7161,6 +7269,13 @@ function checkCasOverlap(technik,plan,casOd,casDo,excludeId){
 function _casOdSel(prefix){
   const s=document.getElementById(prefix+'-cas-od');
   if(s&&!s.innerHTML)s.innerHTML=CAS_OD_OPTS;
+  const d=document.getElementById(prefix+'-cas-do');
+  if(d&&!d.innerHTML) casDoNastav(prefix, d.value||'');
+}
+// v34: kontrola okna pred uložením – „Do" musí byť po „Od"
+function casOknoChyba(od, doo){
+  if(od && doo && _casMin(doo)<=_casMin(od)) return `⛔ Čas „Do" (${doo}) musí byť neskôr ako „Od" (${od}).`;
+  return '';
 }
 const _DS_AKCIA={zapis:'Zápis',zmena:'Zmena',uzavretie:'Uzavretie',storno:'Storno',prerezerv:'Prerezervácia',email:'Email',poznamka:'Poznámka'};
 const _DS_COLOR={zapis:'#dcfce7',zmena:'#f1f5f9',uzavretie:'#bbf7d0',storno:'#fef9c3',prerezerv:'#dbeafe',email:'#f3e8ff',poznamka:'#fff'};
