@@ -286,8 +286,9 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .nep-tbl td.nep-D2,.nep-sw.nep-D2{background:linear-gradient(90deg,#fff 50%,#ffcdd2 50%);color:#b71c1c}
 .nep-tbl td.nep-D1.nep-we,.nep-tbl td.nep-D2.nep-we{opacity:.7}
 /* v34: ½ dňa v kapacite + zlé meno technika */
-.cap-tbl td.polden{background-image:linear-gradient(135deg,rgba(255,205,210,.95) 0 34%,transparent 34%)}
-.cap-tbl td.polden.d2{background-image:linear-gradient(315deg,rgba(255,205,210,.95) 0 34%,transparent 34%)}
+.cap-tbl td.polden{background-image:linear-gradient(135deg,rgba(255,205,210,.95) 0 34%,transparent 34%)!important}
+.cap-tbl td.polden.d2{background-image:linear-gradient(315deg,rgba(255,205,210,.95) 0 34%,transparent 34%)!important}
+.cap-tbl td.polden.c0{color:#b71c1c!important;font-weight:700}
 input.tech-zly{border-color:#dc2626!important;background:#fef2f2!important}
 .nep-tbl td.nep-dlh{background:repeating-linear-gradient(45deg,#ffebee,#ffebee 4px,#fff 4px,#fff 8px);color:#b71c1c;cursor:not-allowed}
 .nep-tbl td.nep-ob::after{content:'';position:absolute;right:3px;top:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
@@ -605,7 +606,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
             <label class="fik-chk" title="Plánovaný dátum je len fiktívny (orientačný)"><input type="checkbox" id="n-fiktiv"> Fiktív</label></div>
           <div class="field" style="flex:0 0 108px"><label>Od</label>
             <select id="n-cas-od" onchange="onCasOdChange('n')"></select></div>
-          <div class="field" style="flex:0 0 112px"><label>Do</label>
+          <div class="field" style="flex:0 0 100px"><label>Do</label>
             <select id="n-cas-do" title="Automaticky +2 h – dá sa zmeniť na dlhšie okno"></select></div>
         </div>
         <div class="field"><label>Pracovný zdroj</label>
@@ -5105,7 +5106,7 @@ function renderCapTbl(f,t){
         tip=`${v} obj. v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
       }
       if(_pol) tip=`🏖️ ${nepPoldenText(_pol)}${tip?'\n'+tip:''}`;
-      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?(_pn?'PN':'D'):(p?`${v}<span style="color:#b91c1c;font-weight:700"> +🔧${p}</span>`:(v||'—'))}</td>`;
+      h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${naDov?(_pn?'PN':'D'):(p?`${v}<span style="color:#b91c1c;font-weight:700"> +🔧${p}</span>`:(v||(_pol?'½':'—')))}</td>`;
     });h+=`</tr>`;
   });
   h+=`</tbody></table>`;wrap.innerHTML=h;
@@ -7249,9 +7250,8 @@ function casDoNastav(prefix, val){
   if(od) for(let t=_casMin(od)+30; t<=_casMin(CAS_DO_MAX); t+=30) casy.push(_casFmt(t));
   if(val && !casy.includes(val)){ casy.push(val); casy.sort(); }
   s.innerHTML='<option value="">—</option>'+casy.map(t=>{
-    const d=od?_casMin(t)-_casMin(od):0, hod=d/60;
-    const lab=od&&d>0?` (${String(hod).replace('.',',')} h)`:'';
-    return `<option value="${t}">${t}${lab}</option>`;}).join('');
+    const d=od?_casMin(t)-_casMin(od):0;
+    return `<option value="${t}" title="${String(d/60).replace('.',',')} h">${t}</option>`;}).join('');
   s.value=val||'';
   s.disabled=!od;
 }
