@@ -2,7 +2,7 @@
 <html lang="sk">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="v34">
+<meta name="app-version" content="v35">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <!-- Zakáz cachovania – vždy načítaj čerstvú verziu -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -234,6 +234,10 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .sys-b-exp{background:#dc2626;color:#fff}.sys-b-exp button{background:#fff;color:#dc2626}
 .sys-cd{background:#111;color:#fde68a;border-radius:6px;padding:2px 9px;font-variant-numeric:tabular-nums;font-weight:700}
 #sys-oznam-pill{position:fixed;right:16px;bottom:16px;z-index:10000;background:#f59e0b;color:#111;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;align-items:center;gap:8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#sys-au{position:fixed;inset:0;z-index:10001;background:rgba(15,23,42,.45);align-items:center;justify-content:center;padding:16px}
+.sys-au-tw{max-height:34vh;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;margin-top:6px}
+.sys-au-t{width:100%;border-collapse:collapse;font-size:12px}.sys-au-t th{position:sticky;top:0;background:#f8fafc;text-align:left;padding:5px 6px;color:#64748b;font-weight:600}
+.sys-au-t td{padding:5px 6px;border-top:1px solid #eef1f5;vertical-align:top}
 #sys-novinky{position:fixed;inset:0;z-index:10001;background:rgba(15,23,42,.45);align-items:center;justify-content:center;padding:16px}
 .sys-nov-box{background:#fff;color:#1e293b;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
 .sys-nov-hd{font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.04em}
@@ -453,6 +457,13 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   </div>
 </div>
 <div id="sys-oznam-pill" style="display:none" onclick="sysOznamRozbal()" title="Zobraziť oznam">📢 Oznam <span id="sys-oznam-pill-cd" class="sys-cd"></span></div>
+<div id="sys-au" style="display:none">
+  <div class="sys-nov-box" style="max-width:760px">
+    <div class="sys-nov-hd" style="color:#0f766e">🤖 Automatické uzavretie z MWF</div>
+    <div id="sys-au-body" class="sys-nov-text"></div>
+    <div style="text-align:right;margin-top:14px"><button onclick="document.getElementById('sys-au').style.display='none'" style="background:#0f766e;color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Rozumiem</button></div>
+  </div>
+</div>
 <div id="sys-novinky" style="display:none">
   <div class="sys-nov-box">
     <div class="sys-nov-hd">✨ Čo je nové <span id="sys-nov-ver"></span></div>
@@ -1372,10 +1383,11 @@ const API_URL = (() => {
 console.log('[INFO] API_URL =', API_URL);
 let API_TOKEN=null; // JWT token po prihlásení
 
-async function api(method, path, body=null){
+async function api(method, path, body=null, extraHeaders=null){
   const opts={method, headers:{'Content-Type':'application/json'}};
   if(API_TOKEN) opts.headers['Authorization']=`Bearer ${API_TOKEN}`;
   if(API_TOKEN && typeof _sysHlavicky==='function') Object.assign(opts.headers, _sysHlavicky());   // v33
+  if(extraHeaders) Object.assign(opts.headers, extraHeaders);   // v35
   if(body) opts.body=JSON.stringify(body);
   try{
     const r=await fetch(API_URL+path, opts);
@@ -1412,6 +1424,8 @@ function apiToMock(o){
     telefon:   o.telefon||'',     // pre tlačidlo Zavolaj
     kod_aktivity: o.kod_aktivity||'',
     zmeneny:   o.zmeneny||now8(),
+    _szm:      o.zmeneny||'',          // v35: čas zmeny zo SERVERA (lokálne sa neprepisuje) – poistka proti prepisu
+    auto_uz:   o.auto_uzavrete||'',    // v35: automaticky uzavreté z MWF
     vytvoreny: o.vytvoreny||'', // kedy bol záznam zapísaný do DB (poradie v "Posledné zapísané")
     cas_od:    o.cas_od||'',
     cas_do:    o.cas_do||'',
@@ -1912,12 +1926,25 @@ function patchObj(id, payload, opts){
   // encodeURIComponent: id_obj môže obsahovať znaky ako '#', ktoré by inak
   // prehliadač orezal ako URL fragment (# a všetko za ním sa nikdy neodošle
   // na server) – bez tohto by PATCH tíško zlyhal 404 na akékoľvek ID so '#'.
-  return api('PATCH', `/api/objednavky/${encodeURIComponent(_pid)}`, payload)
+  // v35: X-Videl-Zmeneny = čas poslednej zmeny zo servera, ktorý tento klient pozná. Ak objednávku
+  // medzitým automaticky uzavrel automat z MWF, backend zmenu zo starého stavu odmietne (409).
+  const _lo = MOCK_OBJ.find(o => o.id_obj === _pid);
+  const _hdr = (_lo && _lo._szm) ? {'X-Videl-Zmeneny': _lo._szm} : null;
+  return api('PATCH', `/api/objednavky/${encodeURIComponent(_pid)}`, payload, _hdr)
+    .then(r => {
+      const o = MOCK_OBJ.find(x => x.id_obj === _pid);
+      if(o && r && r.zmeneny) o._szm = r.zmeneny;
+      return r;
+    })
     .catch(e => {
       // Zmena sa NEULOŽILA, ale lokálna kópia je už upravená → vynúť úplnú synchroniáciu
       // pri najbližšom ticku, aby sa lokálny stav vrátil na serverový (delta by ho nenašla).
       _lastFullSync = 0;
-      if(/\b409\b/.test(e.message||'') && /locked/.test(e.message||'')){
+      if(/\b409\b/.test(e.message||'') && /auto_uzavreta/.test(e.message||'')){
+        let d='';
+        try{ const m=String(e.message).match(/\{.*\}/); if(m){ d=JSON.parse(m[0]).detail?.datum_realizacie||''; } }catch(_){}
+        toast(`🤖 Objednávku ${_pid} medzičasom automaticky uzavrel systém podľa MWF${d?' ('+fmtD(d)+')':''}. Zmena sa neuložila – zoznam sa obnoví.`, 7000);
+      } else if(/\b409\b/.test(e.message||'') && /locked/.test(e.message||'')){
         let who='iný používateľ';
         try{ const m=String(e.message).match(/\{.*\}/); if(m){ const d=JSON.parse(m[0]); who=d.detail?.owner?.meno||who; } }catch(_){}
         toast(`🔒 Zmena sa neuložila – objednávku ${_pid} práve edituje ${who}`);
@@ -2393,7 +2420,7 @@ function getDisplayFarba(o){
 }
 
 function setStatus(msg,k='info'){const sb=document.getElementById('statusbar');if(sb){sb.textContent='  '+msg;sb.className=k;}}
-function toast(msg,dur=2800){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function toast(msg,dur=2800){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),dur);}
 function showTip(el,html){const tip=document.getElementById('tooltip');tip.innerHTML=html;tip.classList.remove('hidden');const r=el.getBoundingClientRect();tip.style.left=r.left+'px';tip.style.top=(r.bottom+4)+'px';}
 function hideTip(){document.getElementById('tooltip').classList.add('hidden');}
 
@@ -5368,7 +5395,7 @@ function renderObjTable(){
       <td>${o.meno||''}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${o.adresa||''}</td>
       <td>${o.typ||''}</td><td>${o.balik||''}</td>
-      <td>${fmtD(o.prijatia)}</td><td>${fmtD(o.real)}</td><td>${fmtD(o.plan)}${o.fiktiv?'<span class="fik-b" title="Fiktívny termín">F</span>':''}</td>
+      <td>${fmtD(o.prijatia)}</td><td>${fmtD(o.real)}${o.auto_uz&&o.farba==='zelena'?'<span title="Automaticky uzavreté podľa MWF" style="margin-left:3px;cursor:help">🤖</span>':''}</td><td>${fmtD(o.plan)}${o.fiktiv?'<span class="fik-b" title="Fiktívny termín">F</span>':''}</td>
       <td>${o.zdroj||''}</td><td>${fmtD(o.lt)}</td>
       <td style="text-align:center;font-weight:${doLTred?'700':'400'};color:${doLTred?'var(--red)':''}">${doLTtxt}</td>
       <td>${o.add_txt||''}</td>
@@ -8516,6 +8543,28 @@ async function _sysTick(prvy){
   _sysRenderOznam();
   if(d.nova_nadpis){ _sysNovaNadpis = d.nova_nadpis; _sysRenderUpdate(); }
   if(d.novinka) _sysNovinka(d.novinka);
+  if(d.auto_uzav) _sysAutoUzav(d.auto_uzav);
+}
+
+// ── v35: Automatické uzavretie z MWF – prehľad pre dispečérku ──
+async function _sysAutoUzav(a){
+  const k = 'auto_uz_videny_' + (currentUser?.id || '');
+  let videny = 0; try{ videny = Number(localStorage.getItem(k) || 0); }catch(_){}
+  if(!a.beh_id || a.beh_id <= videny) return;
+  try{ localStorage.setItem(k, String(a.beh_id)); }catch(_){}
+  if(typeof _lastFullSync !== 'undefined') _lastFullSync = 0;   // najbližší tick stiahne úplný zoznam
+  let L = [];
+  try{ L = await api('GET', `/api/auto-uzavretie/${a.beh_id}`) || []; }catch(_){ L = []; }
+  const U = L.filter(p => p.vysledok === 'uzavrete'), K = L.filter(p => p.vysledok === 'kontrola');
+  const riadok = p => `<tr><td><a href="#" onclick="document.getElementById('sys-au').style.display='none';otvorEditModal('${String(p.id_obj).replace(/'/g,'')}');return false">${_sysEsc(p.id_obj)}</a></td>
+    <td>${_sysEsc(p.meno || '')}<div style="color:#64748b;font-size:11px">${_sysEsc(p.adresa || '')}</div></td>
+    <td>${_sysEsc(p.technik_app || p.technik_mwf || '')}</td><td>${fmtD(p.datum_realizacie || '')}</td>
+    ${p.vysledok === 'kontrola' ? `<td style="font-size:11px">${_sysEsc(p.koncovy_stav || '')}</td>` : ''}</tr>`;
+  const tab = (rows, kontrola) => rows.length ? `<div class="sys-au-tw"><table class="sys-au-t"><thead><tr><th>Objednávka</th><th>Zákazník</th><th>Technik</th><th>${kontrola ? 'Ukončená v MWF' : 'Realizácia'}</th>${kontrola ? '<th>Stav v MWF</th>' : ''}</tr></thead><tbody>${rows.map(riadok).join('')}</tbody></table></div>` : '';
+  document.getElementById('sys-au-body').innerHTML =
+    `<p>Podľa ranného exportu z MWF systém uzavrel <b>${U.length}</b> objednávok, ktoré technici dokončili, ale v aplikácii ešte neboli uzavreté. Dátum realizácie je podľa MWF.</p>` + tab(U, false) +
+    (K.length ? `<p style="margin-top:14px"><b>Na kontrolu: ${K.length}</b> – v MWF sú ukončené ako <b>nevyriešené</b> (pravdepodobne storno). Automat ich nemenil, skontrolujte ich prosím.</p>` + tab(K, true) : '');
+  document.getElementById('sys-au').style.display = 'flex';
 }
 
 // ── Prihlásenie vypršalo (nasadenie backendu / odhlásenie správcom) ──
