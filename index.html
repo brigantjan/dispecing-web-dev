@@ -2,7 +2,7 @@
 <html lang="sk">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="v35">
+<meta name="app-version" content="v35b">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <!-- Zakáz cachovania – vždy načítaj čerstvú verziu -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -235,6 +235,7 @@ input,select,textarea,button{font-family:var(--font);font-size:13px}
 .sys-cd{background:#111;color:#fde68a;border-radius:6px;padding:2px 9px;font-variant-numeric:tabular-nums;font-weight:700}
 #sys-oznam-pill{position:fixed;right:16px;bottom:16px;z-index:10000;background:#f59e0b;color:#111;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;align-items:center;gap:8px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #sys-au{position:fixed;inset:0;z-index:10001;background:rgba(15,23,42,.45);align-items:center;justify-content:center;padding:16px}
+#sys-au-pill{position:fixed;right:16px;bottom:64px;z-index:10000;background:#0f766e;color:#fff;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;align-items:center;gap:6px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .sys-au-tw{max-height:34vh;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;margin-top:6px}
 .sys-au-t{width:100%;border-collapse:collapse;font-size:12px}.sys-au-t th{position:sticky;top:0;background:#f8fafc;text-align:left;padding:5px 6px;color:#64748b;font-weight:600}
 .sys-au-t td{padding:5px 6px;border-top:1px solid #eef1f5;vertical-align:top}
@@ -461,9 +462,10 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   <div class="sys-nov-box" style="max-width:760px">
     <div class="sys-nov-hd" style="color:#0f766e">🤖 Automatické uzavretie z MWF</div>
     <div id="sys-au-body" class="sys-nov-text"></div>
-    <div style="text-align:right;margin-top:14px"><button onclick="document.getElementById('sys-au').style.display='none'" style="background:#0f766e;color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Rozumiem</button></div>
+    <div style="text-align:right;margin-top:14px"><button onclick="sysAuZavri()" style="background:#0f766e;color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Rozumiem</button></div>
   </div>
 </div>
+<div id="sys-au-pill" style="display:none" onclick="sysAuUkaz()" title="Zobraziť objednávky na kontrolu">🤖 MWF – na kontrolu: <b id="sys-au-pill-n">0</b></div>
 <div id="sys-novinky" style="display:none">
   <div class="sys-nov-box">
     <div class="sys-nov-hd">✨ Čo je nové <span id="sys-nov-ver"></span></div>
@@ -5891,6 +5893,8 @@ function closeEdit(){
   // Pri zatvorení uvoľni lock (asynchrónne, neblokuje UI)
   LockManager.release();
   document.getElementById('edit-overlay').classList.remove('open');
+  // v35b: úprava otvorená zo zoznamu automatického uzavretia → po zatvorení sa vráť do zoznamu
+  if(typeof _sysAuNavrat !== 'undefined' && _sysAuNavrat){ _sysAuNavrat = false; setTimeout(sysAuUkaz, 120); }
 }
 function closeEditIfBg(ev){
   // Zámerne NIČ – klik mimo editačnú modálku (na backdrop) už nezatvorí okno.
@@ -8547,24 +8551,71 @@ async function _sysTick(prvy){
 }
 
 // ── v35: Automatické uzavretie z MWF – prehľad pre dispečérku ──
+// Zoznam ostáva dostupný: po kliknutí na objednávku sa otvorí úprava a po jej zatvorení sa zoznam
+// vráti (skontrolované sú označené ✓). Po „Rozumiem" ostane bublina „🤖 Na kontrolu: N", kým nie je všetko pozreté.
+let _sysAu = null, _sysAuNavrat = false, _sysAuNacitava = false;
+function _sysAuKey(){ return 'auto_uz_hotove_' + (currentUser?.id || ''); }
+function _sysAuHotove(){
+  try{ const d = JSON.parse(localStorage.getItem(_sysAuKey()) || '{}'); return (_sysAu && d.beh_id === _sysAu.beh_id) ? new Set(d.ids || []) : new Set(); }
+  catch(_){ return new Set(); }
+}
+function _sysAuOznac(id){
+  if(!_sysAu) return;
+  const s = _sysAuHotove(); s.add(id);
+  try{ localStorage.setItem(_sysAuKey(), JSON.stringify({ beh_id: _sysAu.beh_id, ids: [...s] })); }catch(_){}
+}
 async function _sysAutoUzav(a){
   const k = 'auto_uz_videny_' + (currentUser?.id || '');
   let videny = 0; try{ videny = Number(localStorage.getItem(k) || 0); }catch(_){}
-  if(!a.beh_id || a.beh_id <= videny) return;
-  try{ localStorage.setItem(k, String(a.beh_id)); }catch(_){}
-  if(typeof _lastFullSync !== 'undefined') _lastFullSync = 0;   // najbližší tick stiahne úplný zoznam
+  if(!a.beh_id) return;
+  const novy = a.beh_id > videny;
+  if(!novy && _sysAu && _sysAu.beh_id === a.beh_id){ _sysAuPill(); return; }
+  if(_sysAuNacitava) return;
+  _sysAuNacitava = true;
   let L = [];
-  try{ L = await api('GET', `/api/auto-uzavretie/${a.beh_id}`) || []; }catch(_){ L = []; }
-  const U = L.filter(p => p.vysledok === 'uzavrete'), K = L.filter(p => p.vysledok === 'kontrola');
-  const riadok = p => `<tr><td><a href="#" onclick="document.getElementById('sys-au').style.display='none';otvorEditModal('${String(p.id_obj).replace(/'/g,'')}');return false">${_sysEsc(p.id_obj)}</a></td>
+  try{ L = await api('GET', `/api/auto-uzavretie/${a.beh_id}`) || []; }catch(_){ _sysAuNacitava = false; return; }
+  _sysAuNacitava = false;
+  _sysAu = { beh_id: a.beh_id, U: L.filter(p => p.vysledok === 'uzavrete'), K: L.filter(p => p.vysledok === 'kontrola') };
+  if(novy){
+    try{ localStorage.setItem(k, String(a.beh_id)); }catch(_){}
+    if(typeof _lastFullSync !== 'undefined') _lastFullSync = 0;   // najbližší tick stiahne úplný zoznam
+    sysAuUkaz();
+  } else _sysAuPill();
+}
+function _sysAuRender(){
+  if(!_sysAu) return;
+  const hot = _sysAuHotove(), U = _sysAu.U, K = _sysAu.K;
+  const zost = K.filter(p => !hot.has(p.id_obj)).length;
+  const riadok = p => { const ok = hot.has(p.id_obj);
+    return `<tr${ok ? ' style="opacity:.55"' : ''}><td style="white-space:nowrap"><a href="#" onclick="sysAuOtvor('${String(p.id_obj).replace(/[^\w#-]/g,'')}');return false">${_sysEsc(p.id_obj)}</a>${ok ? ' <span style="color:#16a34a" title="Pozreté">✓</span>' : ''}</td>
     <td>${_sysEsc(p.meno || '')}<div style="color:#64748b;font-size:11px">${_sysEsc(p.adresa || '')}</div></td>
     <td>${_sysEsc(p.technik_app || p.technik_mwf || '')}</td><td>${fmtD(p.datum_realizacie || '')}</td>
-    ${p.vysledok === 'kontrola' ? `<td style="font-size:11px">${_sysEsc(p.koncovy_stav || '')}</td>` : ''}</tr>`;
+    ${p.vysledok === 'kontrola' ? `<td style="font-size:11px">${_sysEsc(p.koncovy_stav || '')}</td>` : ''}</tr>`; };
   const tab = (rows, kontrola) => rows.length ? `<div class="sys-au-tw"><table class="sys-au-t"><thead><tr><th>Objednávka</th><th>Zákazník</th><th>Technik</th><th>${kontrola ? 'Ukončená v MWF' : 'Realizácia'}</th>${kontrola ? '<th>Stav v MWF</th>' : ''}</tr></thead><tbody>${rows.map(riadok).join('')}</tbody></table></div>` : '';
   document.getElementById('sys-au-body').innerHTML =
-    `<p>Podľa ranného exportu z MWF systém uzavrel <b>${U.length}</b> objednávok, ktoré technici dokončili, ale v aplikácii ešte neboli uzavreté. Dátum realizácie je podľa MWF.</p>` + tab(U, false) +
-    (K.length ? `<p style="margin-top:14px"><b>Na kontrolu: ${K.length}</b> – v MWF sú ukončené ako <b>nevyriešené</b> (pravdepodobne storno). Automat ich nemenil, skontrolujte ich prosím.</p>` + tab(K, true) : '');
+    (K.length ? `<p><b>Na kontrolu: ${K.length}</b>${zost < K.length ? ` <span style="color:${zost ? '#b45309' : '#16a34a'}">(zostáva ${zost})</span>` : ''} – v MWF sú ukončené ako <b>nevyriešené</b> (pravdepodobne storno). Automat ich nemenil. Kliknutím otvoríte objednávku – po zatvorení úpravy sa vrátite sem.</p>` + tab(K, true) : '') +
+    `<p style="margin-top:${K.length ? 14 : 0}px">Podľa ranného exportu z MWF systém uzavrel <b>${U.length}</b> objednávok, ktoré technici dokončili, ale v aplikácii ešte neboli uzavreté. Dátum realizácie je podľa MWF.</p>` + tab(U, false);
+}
+function sysAuUkaz(){
+  _sysAuRender();
   document.getElementById('sys-au').style.display = 'flex';
+  document.getElementById('sys-au-pill').style.display = 'none';
+}
+function sysAuZavri(){ document.getElementById('sys-au').style.display = 'none'; _sysAuPill(); }
+function _sysAuPill(){
+  const pill = document.getElementById('sys-au-pill'); if(!pill || !_sysAu) return;
+  const hot = _sysAuHotove(), zost = _sysAu.K.filter(p => !hot.has(p.id_obj)).length;
+  const modal = document.getElementById('sys-au').style.display === 'flex';
+  document.getElementById('sys-au-pill-n').textContent = zost;
+  pill.style.display = (zost > 0 && !modal) ? 'flex' : 'none';
+}
+function sysAuOtvor(id){
+  _sysAuOznac(id);
+  document.getElementById('sys-au').style.display = 'none';
+  _sysAuNavrat = true;
+  otvorEditModal(id);
+  // úprava sa neotvorila (napr. objednávka už nie je v zozname) → zoznam hneď späť
+  if(!document.getElementById('edit-overlay')?.classList.contains('open')){ _sysAuNavrat = false; sysAuUkaz(); }
 }
 
 // ── Prihlásenie vypršalo (nasadenie backendu / odhlásenie správcom) ──
