@@ -115,6 +115,28 @@ textarea{min-height:70px;resize:vertical}.row{display:flex;gap:8px}.row>*{flex:1
     <button class="btn b-red" onclick="odhlasVsetkych()">⏏ Odhlásiť všetkých okrem mňa</button>
     <div class="hint" style="margin-top:8px">Tvoje prihlásenia (táto stránka aj aplikácia) ostanú. Ostatným sa zobrazí červený pruh „Prihlásenie vypršalo".</div>
   </div>
+  <div class="card full" id="au-card">
+    <h2><span class="num">6</span>Automatické uzatváranie z MWF <span class="mu small" id="au-stav" style="margin-left:auto;font-weight:400"></span></h2>
+    <div class="hint">Ráno v okne <span id="au-okno">06:00–12:00</span> každých 10 min skontroluje priečinok MWF v schránke, nájde dnešný MWF export
+      (odosielateľ + predmet) a uzavrie otvorené objednávky, ktoré sú v MWF <b>ukončené a vyriešené</b>. Ukončené nevyriešené len ukáže dispečérkam na kontrolu.
+      Ak by mal uzavrieť viac ako <b>limit</b>, nezapíše nič a beh čaká na tvoje potvrdenie.</div>
+    <div class="row" style="flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:0 0 120px"><label><input type="checkbox" id="au-zap" style="width:auto;margin-right:6px">Zapnuté</label></div>
+      <div style="flex:2;min-width:200px"><label>Schránka (IMAP z aplikácie)</label><input id="au-schr" placeholder="e-mail schránky"></div>
+      <div style="flex:2;min-width:200px"><label>Odosielateľ MWF exportu</label><input id="au-odos" placeholder="e-mail odosielateľa"></div>
+      <div style="flex:0 0 110px"><label>Predmet obsahuje</label><input id="au-pred" placeholder="mwf"></div>
+      <div style="flex:0 0 90px"><label>Limit</label><input id="au-limit" type="number" min="1" max="2000"></div>
+      <div style="flex:0 0 auto"><button class="btn b-blue" onclick="auUloz()">Uložiť</button></div>
+    </div>
+    <div class="err" id="au-chyba"></div>
+    <div class="act">
+      <button class="btn b-gray" onclick="auSpusti('nahlad')">🔍 Náhľad z posledného mailu</button>
+      <label class="btn b-gray" style="margin:0;display:inline-block;color:var(--tx)">📄 Náhľad z Excelu<input type="file" accept=".xlsx" id="au-subor" style="display:none" onchange="auUpload(this)"></label>
+      <span class="hint" style="margin:0;align-self:center">Náhľad nič nezapisuje – pozrieš si zoznam a potom ho môžeš potvrdiť.</span>
+    </div>
+    <div class="tw" style="margin-top:12px"><table><thead><tr><th>Čas</th><th>Zdroj</th><th>Stav</th><th>Uzavrieť / uzavreté</th><th>Už uzavrela dispečérka</th><th>Zamknuté</th><th>Na kontrolu</th><th>Spustil</th><th></th></tr></thead><tbody id="au-behy"></tbody></table></div>
+    <div id="au-detail"></div>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -214,7 +236,7 @@ async function nacitajVsetko(){
     $('who').innerHTML = `${esc(i.ja.meno)} · <a onclick="odhlas()">Odhlásiť</a>`;
     $('be-start').textContent = datcas(i.start);
   }catch(e){ if(tokeny[env]) toast('⚠ ' + e.message); return; }
-  nacitajOnline(); nacitajNovinky(); nacitajVerzie();
+  nacitajOnline(); nacitajNovinky(); nacitajVerzie(); nacitajAutoUzav();
 }
 
 // ── 1 + 2: online a oznam ────────────────────────────────────
@@ -325,6 +347,84 @@ async function nacitajVerzie(){
 async function odhlasVsetkych(){
   if(!confirm(`Naozaj odhlásiť všetkých používateľov na ${ENV[env].nazov} (okrem teba)?\n\nRozpracovanú neuloženú prácu môžu stratiť.`)) return;
   try{ const d = await api('POST', '/api/sys/admin/odhlasit-vsetkych'); toast(`⏏ Odhlásených: ${d.zrusene}`); nacitajOnline(); }catch(e){ toast('❌ ' + e.message); }
+}
+
+// ── 6: Automatické uzatváranie z MWF ─────────────────────────
+const AU_STAV = { prebieha: '⏳ prebieha', spracovany: '✅ spracovaný', nahlad: '🔍 náhľad', caka_na_potvrdenie: '⏸ čaká na potvrdenie', chyba: '❌ chyba' };
+const AU_ZDROJ = { mail: 'mail (automat)', 'mail-rucne': 'mail (ručne)', upload: 'nahratý Excel' };
+const AU_VYS = { uzavrete: 'Uzavreté', caka: 'Na uzavretie (čaká)', uz_uzavrete: 'Už uzavrela dispečérka', zamknute: 'Zamknuté (v editácii)', kontrola: 'Na kontrolu (nevyriešené)', chyba: 'Chyba' };
+let _auTimer = null, _auNast = null;
+async function nacitajAutoUzav(){
+  let d; try{ d = await api('GET', '/api/sys/admin/auto-uzav'); }
+  catch(e){ $('au-behy').innerHTML = `<tr><td colspan="9" class="mu">${esc(e.status === 404 ? 'Backend ešte nemá automatické uzatváranie (treba v22).' : e.message)}</td></tr>`; return; }
+  const n = d.nastavenia || {}; _auNast = n;
+  if(document.activeElement?.closest?.('#au-card') == null){
+    $('au-zap').checked = !!n.zapnute; $('au-schr').value = n.schranka || ''; $('au-odos').value = n.odosielatel || '';
+    $('au-pred').value = n.predmet ?? 'mwf'; $('au-limit').value = n.limit || 60;
+  }
+  $('au-okno').textContent = d.okno || '';
+  $('au-stav').textContent = (n.zapnute ? '🟢 zapnuté' : '⚪ vypnuté') + (d.posl_tick ? ` · posledná kontrola ${cas(d.posl_tick)}` : '') + (d.bezi ? ' · ⏳ beží' : '');
+  $('au-chyba').textContent = d.chyba ? '⚠ ' + d.chyba : '';
+  const B = d.behy || [];
+  $('au-behy').innerHTML = B.length ? B.map(b => {
+    const p = b.pocty || {}, uz = (p.uzavrete || 0), caka = (p.caka || 0);
+    const moznoPotvrdit = (b.stav === 'nahlad' || b.stav === 'caka_na_potvrdenie') && caka > 0;
+    return `<tr><td>${datcas(b.vytvorene)}</td><td>${esc(AU_ZDROJ[b.zdroj] || b.zdroj)}<div class="mu small">${esc(b.subor || '')}${b.prijaty ? ' · mail ' + datcas(b.prijaty) : ''}</div></td>
+      <td>${esc(AU_STAV[b.stav] || b.stav)}${b.chyba ? `<div class="err" style="margin:2px 0 0">${esc(b.chyba)}</div>` : ''}</td>
+      <td><b>${caka ? caka + ' čaká' : uz}</b>${caka && uz ? ` · ${uz} uzavreté` : ''}</td><td>${p.uz_uzavrete || 0}</td><td>${p.zamknute || 0}</td><td>${p.kontrola || 0}</td>
+      <td class="small">${esc(b.spustil || '')}</td>
+      <td style="white-space:nowrap"><button class="btn b-gray b-sm" onclick="auDetail(${b.id})">Detail</button>
+        ${moznoPotvrdit ? `<button class="btn b-blue b-sm" onclick="auPotvrd(${b.id}, ${caka})">Uzavrieť ${caka}</button>` : ''}</td></tr>`;
+  }).join('') : '<tr><td colspan="9" class="mu">Zatiaľ žiadny beh.</td></tr>';
+  clearTimeout(_auTimer);
+  if(d.bezi || B.some(b => b.stav === 'prebieha')) _auTimer = setTimeout(nacitajAutoUzav, 3000);
+}
+async function auUloz(){
+  const body = { zapnute: $('au-zap').checked, schranka: $('au-schr').value.trim(), odosielatel: $('au-odos').value.trim(),
+                 predmet: $('au-pred').value.trim(), limit: Number($('au-limit').value) || 60 };
+  if(body.zapnute && !confirm(`Zapnúť automatické uzatváranie na ${ENV[env].nazov}?\n\nKaždé ráno uzavrie otvorené objednávky, ktoré sú v MWF ukončené a vyriešené (do limitu ${body.limit}; viac čaká na potvrdenie).`)) return;
+  try{ await api('POST', '/api/sys/admin/auto-uzav/nastavenia', body); toast('✅ Nastavenie uložené'); nacitajAutoUzav(); }
+  catch(e){ toast('❌ ' + e.message); }
+}
+async function auSpusti(rezim){
+  try{ const d = await api('POST', '/api/sys/admin/auto-uzav/spustit', { rezim });
+       toast(`⏳ Spracúvam${d.mail ? ' mail ' + datcas(d.mail.prijaty) : ''} – môže to trvať pol minúty`); setTimeout(nacitajAutoUzav, 800); }
+  catch(e){ toast('❌ ' + e.message); }
+}
+function auUpload(inp){
+  const f = inp.files && inp.files[0]; inp.value = ''; if(!f) return;
+  if(f.size > 40 * 1024 * 1024){ toast('❌ Súbor je príliš veľký'); return; }
+  const r = new FileReader();
+  r.onload = async () => {
+    try{ await api('POST', '/api/sys/admin/auto-uzav/spustit', { rezim: 'nahlad', xlsx_base64: String(r.result), subor: f.name });
+         toast('⏳ Spracúvam Excel – môže to trvať pol minúty'); setTimeout(nacitajAutoUzav, 800); }
+    catch(e){ toast('❌ ' + e.message); }
+  };
+  r.readAsDataURL(f);
+}
+async function auPotvrd(id, n){
+  if(!confirm(`Uzavrieť ${n} objednávok na ${ENV[env].nazov} podľa MWF?\n\nZapíše sa dátum realizácie z MWF a stav Hotová. Objednávky, ktoré medzitým uzavrela dispečérka alebo ich má otvorené, sa preskočia.`)) return;
+  try{ await api('POST', `/api/sys/admin/auto-uzav/${id}/potvrdit`); toast('⏳ Uzatváram…'); setTimeout(nacitajAutoUzav, 800); }
+  catch(e){ toast('❌ ' + e.message); }
+}
+async function auDetail(id){
+  let L; try{ L = await api('GET', `/api/sys/admin/auto-uzav/${id}`); }catch(e){ toast('❌ ' + e.message); return; }
+  const skup = {}; L.forEach(p => (skup[p.vysledok] = skup[p.vysledok] || []).push(p));
+  const poradie = ['caka', 'uzavrete', 'uz_uzavrete', 'zamknute', 'kontrola', 'chyba'];
+  $('au-detail').innerHTML = `<div class="nov-item"><div class="h"><b>Beh #${id}</b><span class="mu small">${L.length} objednávok</span>
+      <button class="btn b-gray b-sm" style="margin-left:auto" onclick="$('au-detail').innerHTML=''">Zavrieť</button></div>` +
+    poradie.filter(k => skup[k]).map(k => {
+      const st = {}; skup[k].forEach(p => st[p.stredisko || '?'] = (st[p.stredisko || '?'] || 0) + 1);
+      return `<details style="margin-top:8px"${k === 'caka' || k === 'kontrola' ? ' open' : ''}><summary><b>${esc(AU_VYS[k] || k)}: ${skup[k].length}</b>
+        <span class="mu small">(${Object.entries(st).map(([s, c]) => esc(ST[s] || s) + ' ' + c).join(', ')})</span></summary>
+        <div class="tw" style="max-height:340px;overflow:auto"><table><thead><tr><th>Objednávka</th><th>Stredisko</th><th>Zákazník / adresa</th><th>Technik (app / MWF)</th><th>Ukončené v MWF</th><th>Stav v MWF</th></tr></thead><tbody>` +
+        skup[k].slice(0, 1000).map(p => `<tr><td>${esc(p.id_obj)}</td><td>${esc(ST[p.stredisko] || p.stredisko || '')}</td>
+          <td>${esc(p.meno || '')}<div class="mu small">${esc(p.adresa || '')}</div></td>
+          <td>${esc(p.technik_app || '–')}<div class="mu small">${esc(p.technik_mwf || '')}</div></td>
+          <td>${p.ukoncenie ? esc(String(p.ukoncenie).replace('T', ' ').slice(0, 16)) : ''}</td><td class="small">${esc(p.koncovy_stav || '')}</td></tr>`).join('') +
+        `</tbody></table></div></details>`;
+    }).join('') + '</div>';
+  $('au-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 zobraz();
