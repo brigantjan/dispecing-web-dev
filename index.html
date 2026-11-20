@@ -2,7 +2,7 @@
 <html lang="sk">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="v35b">
+<meta name="app-version" content="v36">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <!-- Zakáz cachovania – vždy načítaj čerstvú verziu -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -494,7 +494,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="sb-nav-item active" id="snav0" onclick="switchTab(0)"><span class="icon">➕</span>Nová objednávka</div>
     <div class="sb-nav-item" id="snav1" onclick="switchTab(1)"><span class="icon">📋</span>Objednávky</div>
     <div class="sb-nav-item" id="snav2" onclick="switchTab(2)"><span class="icon">📅</span>Denný plán</div>
-    <div class="sb-nav-item" id="snav3" onclick="switchTab(3)"><span class="icon">🔵</span>Pre-rezervované</div>
+    <div class="sb-nav-item" id="snav3" onclick="switchTab(3)"><span class="icon">🔵</span>Aktivačné po LT</div>
     <div class="sb-nav-item" id="snav4" onclick="switchTab(4)"><span class="icon">⏳</span>Nenaplánované</div>
     <div class="sb-nav-item" id="snav5" onclick="switchTab(5)"><span class="icon">📱</span>Mobil (technik)</div>
     <div class="sb-nav-item" id="snav6" onclick="switchTab(6)"><span class="icon">⚙️</span>Správa používateľov</div>
@@ -542,7 +542,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
     <div class="tab-btn active" id="tb0" onclick="switchTab(0)">➕ Nová</div>
     <div class="tab-btn" id="tb1" onclick="switchTab(1)">📋 Objednávky</div>
     <div class="tab-btn" id="tb2" onclick="switchTab(2)">📅 Denný plán</div>
-    <div class="tab-btn" id="tb3" onclick="switchTab(3)">🔵 Pre-rezervované ADD</div>
+    <div class="tab-btn" id="tb3" onclick="switchTab(3)">🔵 Aktivačné po LT</div>
     <div class="tab-btn" id="tb4" onclick="switchTab(4)">⏳ Nenaplánované</div>
     <div class="tab-btn" id="tb5" onclick="switchTab(5)">📱 Mobil (technik)</div>
     <div class="tab-btn" id="tb6" onclick="switchTab(6)">⚙️ Správa používateľov</div>
@@ -644,7 +644,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
           <div class="stav-row" id="n-stav-opts">
             <div class="stav-opt" data-stav="hotova" onclick="stavToggle(this,'hotova')">✔ Hotová</div>
             <div class="stav-opt" data-stav="storno" onclick="stavToggle(this,'storno')">⚠ Storno</div>
-            <div class="stav-opt" data-stav="prerezerv" onclick="stavToggle(this,'prerezerv')">● Pre-rez.ADD</div>
+            <div class="stav-opt" data-stav="prerezerv" onclick="stavToggle(this,'prerezerv')">● Aktiv. po LT</div>
           </div>
         </div>
         <div class="dup-warn" id="n-dup-warn"></div>
@@ -674,7 +674,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <!-- Pre-rezervované kapacita -->
       <div class="rp-sec" id="rp1" style="flex:1;min-height:60px">
         <div class="rp-sec-hdr" style="background:#e3f2fd;border-bottom-color:#bbdefb">
-          <span class="rp-title" style="color:var(--blue)">Plánovaná realizácia Pre-rezervovaných</span>
+          <span class="rp-title" style="color:var(--blue)">v tom plánovaná realizácia Aktivačných po LT</span>
           <button class="btn btn-outline btn-xs" onclick="refreshPrCap()">↻</button>
         </div>
         <div class="cap-wrap" id="pr-cap-wrap"></div>
@@ -702,7 +702,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="quick-btn" id="qb-neukoncene" onclick="quickFilter('neukoncene')">Neukončené</div>
       <div class="quick-btn" id="qb-ukoncene" onclick="quickFilter('ukoncene')">Ukončené</div>
       <div class="quick-btn" id="qb-storno" onclick="quickFilter('storno')">Stornované</div>
-      <div class="quick-btn" id="qb-prerezerv" onclick="quickFilter('prerezerv')">Prerezerv.</div>
+      <div class="quick-btn" id="qb-prerezerv" onclick="quickFilter('prerezerv')">Aktiv. po LT</div>
       <div class="quick-btn" id="qb-neplan" onclick="quickFilter('neplan')">Nenaplánované</div>
       <div class="quick-btn" id="qb-fiktiv" onclick="quickFilter('fiktiv')" title="Neukončené objednávky s fiktívnym termínom, zoradené podľa plánu (najstaršie hore)">Fiktívne <span id="qb-fiktiv-n"></span></div>
       <div style="width:1px;height:18px;background:var(--border);margin:0 2px"></div>
@@ -919,16 +919,15 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
   </div>
   </div>
 
-  <!-- ═══ TAB 3: PRE-REZERVOVANÉ ═══ -->
+  <!-- ═══ TAB 3: AKTIVAČNÉ PO LT (v36: bez generovania mailov pre ST) ═══ -->
   <div class="tab-page" id="page3" style="flex-direction:column">
     <div class="ctrl-bar">
       <button class="btn btn-accent" onclick="showPrerezerv()">↻ Obnoviť</button>
-      <button id="btn-generuj-email" class="btn btn-red" onclick="emailPrerezerv()">📧 Generuj email pre označené</button>
       <span class="sum-lbl" id="pr-sum"></span>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" id="pr-tbl">
-        <thead><tr><th class="chk-cell">☑</th><th>ID</th><th>Meno</th><th>Adresa</th><th>Typ</th><th>Balík</th><th>Prijatie</th><th style="color:var(--red)">Plán ↑</th><th>LT</th><th>Technik</th><th>ADD</th><th>REZ</th><th>Poznámky</th></tr></thead>
+        <thead><tr><th>ID</th><th>Meno</th><th>Adresa</th><th>Typ</th><th>Balík</th><th>Prijatie</th><th style="color:var(--red)">Plán ↑</th><th>LT</th><th>Technik</th><th>ADD</th><th>REZ</th><th>Poznámky</th></tr></thead>
         <tbody id="pr-tbody"></tbody>
       </table>
     </div>
@@ -1349,7 +1348,7 @@ body[data-role="technik"] #page5 { display:flex!important; flex-direction:column
       <div class="stav-row" id="e-stav-opts">
         <div class="stav-opt" data-stav="hotova" onclick="eStavToggle(this,'hotova')">✔ Hotová</div>
         <div class="stav-opt" data-stav="storno" onclick="eStavToggle(this,'storno')">⚠ Storno</div>
-        <div class="stav-opt" data-stav="prerezerv" onclick="eStavToggle(this,'prerezerv')">● Pre-rez.ADD</div>
+        <div class="stav-opt" data-stav="prerezerv" onclick="eStavToggle(this,'prerezerv')">● Aktiv. po LT</div>
         <div class="stav-opt" data-stav="planovana" onclick="eStavToggle(this,'planovana')">○ Plánovaná</div>
       </div>
     </div>
@@ -2905,7 +2904,7 @@ function updateDash(){
     <div class="dash-card c-blue" onclick="switchTab(2)"><div class="dash-val">${dnes}</div><div class="dash-lbl">Dnes na realizáciu</div></div>
     <div class="dash-card c-red" onclick="dashClickFilter('neplan')"><div class="dash-val">${neplan}</div><div class="dash-lbl">Nenaplánovaných</div></div>
     <div class="dash-card c-orange" onclick="dashClickFilter('oneskorene')"><div class="dash-val">${oneskor}</div><div class="dash-lbl">Oneskorených</div></div>
-    <div class="dash-card c-blue" onclick="switchTab(3)"><div class="dash-val">${prerez}</div><div class="dash-lbl">Pre-rezervovaných ADD</div></div>
+    <div class="dash-card c-blue" onclick="switchTab(3)"><div class="dash-val">${prerez}</div><div class="dash-lbl">Aktivačných po LT</div></div>
     <div class="dash-card c-yellow" onclick="dashClickFilter('neukoncene')"><div class="dash-val">${celkom}</div><div class="dash-lbl">Otvorených celkom</div></div>
     ${notRead?`<div class="dash-card c-orange"><div class="dash-val">${notRead}</div><div class="dash-lbl">Nové notifikácie</div></div>`:''}`;
   // Aktualizuj globálny topbar – Po LT a diagnostiku (volá sa pri každej zmene MOCK_OBJ)
@@ -4623,7 +4622,7 @@ function aiTrigger(){
   // (aj keď agent vrátil 'ok' alebo 'ok-overload' s plánom > LT)
   const isPreRez = isAdd && lt && result.plan && result.plan > lt;
   const prerezHint = isPreRez
-    ? ` <strong style="color:#b91c1c">⚠ Daj pre-rezervovať!</strong>`
+    ? ` <strong style="color:#b91c1c">⚠ Plán po LT – objednávka bude Aktivačná po LT</strong>`
     : '';
 
   // Časové okno – len ak AI pridelil technika a dispečérka ešte nenavrhla okno
@@ -4725,7 +4724,7 @@ function aiTrigger(){
   else if(result.dovod === 'pre-rezervacia'){
     hint.className = 'ai-hint warn';
     hint.innerHTML = `⚠ <strong>ADD nestíha LT!</strong> Najskorší možný plán: <strong>${planFmt}</strong> (po LT).`
-                   + ` <span style="color:#b91c1c;font-size:11px">→ Pošli na pre-rezerváciu do Slovak Telekomu.</span>`;
+                   + ` <span style="color:#b91c1c;font-size:11px">→ Objednávka sa zapíše ako Aktivačná po LT.</span>`;
   }
   else {
     hint.className = 'ai-hint';
@@ -5146,7 +5145,7 @@ function renderPrCapTbl(f,t){
   const grid={};
   MOCK_OBJ.forEach(o=>{if(o.farba!=='modra'||o.real||!o.zdroj)return;if(!o.plan||o.plan<f||o.plan>t)return;if(!grid[o.zdroj])grid[o.zdroj]={};if(!grid[o.zdroj][o.plan])grid[o.zdroj][o.plan]=[];const _bal=o.balik?`[${o.balik}]`:'';const tipItem=o.cas_od?`${o.adresa||''} ${_bal} ${o.cas_od}–${o.cas_do}`.trim():`${o.adresa||''} ${_bal}`.trim();if(tipItem)grid[o.zdroj][o.plan].push(tipItem);});
   const techs=Object.keys(grid).sort();
-  if(!techs.length){wrap.innerHTML='<div style="padding:10px;color:var(--muted);font-size:11px">Žiadne pre-rezervované.</div>';return;}
+  if(!techs.length){wrap.innerHTML='<div style="padding:10px;color:var(--muted);font-size:11px">Žiadne aktivačné po LT.</div>';return;}
   let h=`<table class="cap-tbl"><thead><tr><th>Technik</th>`;
   dates.forEach(d=>{
     const vs=isVikendSviatok(d);
@@ -5169,7 +5168,7 @@ function renderPrCapTbl(f,t){
       let tip=a.join('\n');
       if(tim>1 && v>0){
         const priemer=(v/tim).toFixed(1);
-        tip=`${v} pre-rezerv. v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
+        tip=`${v} aktiv. po LT v ${tim}-člennom tíme (priemer ${priemer}/technik)\n${tip}`;
       }
       h+=`<td class="${cls}" data-tip="${tip.replace(/"/g,'&quot;')}" onmouseenter="if(this.dataset.tip)showTip(this,this.dataset.tip.replace(/\\n/g,'<br>'))" onmouseleave="hideTip()">${v||'—'}</td>`;
     });
@@ -5466,141 +5465,21 @@ function showPrerezerv(){
   ).sort((a,b)=>(a.plan||'').localeCompare(b.plan||''));
   // Zachovaj len zaškrtnuté ktoré sú stále v zozname
   prChecked.forEach(id=>{ if(!rows.find(o=>o.id_obj===id)) prChecked.delete(id); });
-  document.getElementById('pr-sum').textContent=`Pre-rezervácií: ${rows.length}`;
+  document.getElementById('pr-sum').textContent=`Aktivačných po LT: ${rows.length}`;
   document.getElementById('pr-tbody').innerHTML=rows.map(o=>{
     const rm=o.pozn.match(/REZ\s*(\d{1,2})/);const rezStr=rm?`REZ${rm[1].padStart(2,'0')}`:'';
-    const emailFlg=o.pozn.includes('Email odoslaný');
-    const chk=prChecked.has(o.id_obj)?'☑':'☐';
-    return`<tr class="tr-blue${prChecked.has(o.id_obj)?' bulk-checked':''}" ondblclick="otvorEditModal('${o.id_obj}')">
-      <td class="chk-cell" onclick="prToggle(event,'${o.id_obj}')">${chk}</td>
+    return`<tr class="tr-blue" ondblclick="otvorEditModal('${o.id_obj}')">
       <td class="td-mono">${o.id_obj}</td><td>${o.meno||''}</td><td>${o.adresa||''}</td>
       <td>${o.typ||''}</td><td>${o.balik||''}</td><td>${fmtD(o.prijatia)}</td>
       <td style="font-weight:700;color:var(--red)">${fmtD(o.plan)}</td>
       <td>${fmtD(o.lt)}</td><td>${o.zdroj||''}</td><td>${o.add_txt||''}</td>
       <td>${rezStr}</td>
-      <td>${emailFlg?'✉ ':''}${o.pozn||''}</td>
+      <td>${o.pozn||''}</td>
     </tr>`;
   }).join('');
-  setStatus(`Pre-rezervované ADD: ${rows.length} záznamov`,rows.length?'ok':'info');
+  setStatus(`Aktivačné po LT: ${rows.length} záznamov`,rows.length?'ok':'info');
 }
-function prToggle(ev,id){ev.stopPropagation();const td=ev.currentTarget;if(prChecked.has(id)){prChecked.delete(id);td.textContent='☐';}else{prChecked.add(id);td.textContent='☑';}}
-function emailPrerezerv(){
-  if(!prChecked.size){toast('⚠ Označte aspoň jednu objednávku (kliknite ☐).');return;}
-  const rows=MOCK_OBJ.filter(o=>prChecked.has(o.id_obj));
-  const subject='Po LT - pre-rezervovanie objednávok ADD';
-
-  // Plain-text verzia (fallback pre klientov bez HTML podpory)
-  let bodyTxt=`Dobrý deň,\n\nzasielame zoznam objednávok ADD s plánovaným termínom realizácie po dátume LT:\n\n`;
-  rows.forEach(o=>{
-    bodyTxt+=`ID: ${o.id_obj} | ${o.meno} | ${o.adresa} | Typ: ${o.typ} | Balík: ${o.balik}\n`;
-    bodyTxt+=`  Príjem: ${fmtD(o.prijatia)} | Plán: ${fmtD(o.plan)} | LT: ${fmtD(o.lt)} | Technik: ${o.zdroj||'-'}\n`;
-    if(o.pozn) bodyTxt+=`  Poznámky: ${o.pozn}\n`;
-    bodyTxt+='\n';
-  });
-  bodyTxt+=`— DISPEČERSKÝ SYSTÉM ZRIADOVANIE · SUPTEL ŽILINA`;
-
-  // HTML verzia – tabuľka identická referenčnému obrázku
-  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const trs=rows.map(o=>`
-    <tr>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2;font-family:Consolas,monospace">${esc(o.id_obj)}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(o.meno)}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(o.adresa)}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(o.typ)}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(o.balik)}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(fmtD(o.prijatia))}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(fmtD(o.real))}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2;color:#c62828;font-weight:700">${esc(fmtD(o.plan))}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(o.zdroj||'')}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(fmtD(o.lt))}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2;text-align:center">${esc(o.add_txt||'')}</td>
-      <td style="padding:6px 10px;border:1px solid #d0d7e2">${esc(o.pozn||'')}</td>
-    </tr>`).join('');
-  const bodyHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Calibri,Segoe UI,Arial,sans-serif;font-size:14px;color:#1a1d23">
-<p>Dobrý deň,</p>
-<p>zasielame zoznam objednávok ADD, ktoré majú plánovaný termín realizácie <strong>po dátume LT</strong>:</p>
-<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;font-family:Calibri,Segoe UI,Arial,sans-serif">
-  <thead>
-    <tr>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">ID objednávky</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Meno</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Adresa</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Typ</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Typ balíka</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Dátum prijatia</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Dátum realizácie</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Plánovaný dátum</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Technik</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">LT</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">ADD</th>
-      <th style="padding:8px 10px;background:#1565c0;color:#fff;text-align:left;border:1px solid #0d47a1">Poznámky</th>
-    </tr>
-  </thead>
-  <tbody>${trs}</tbody>
-</table>
-<p style="color:#888;font-size:11px;margin-top:18px">— DISPEČERSKÝ SYSTÉM ZRIADOVANIE · SUPTEL ŽILINA</p>
-</body></html>`;
-
-  // .eml multipart/alternative – Outlook si vyberie HTML časť a otvorí krásnu tabuľku
-  // X-Unsent: 1 → Outlook ho otvorí ako NEODOSLANÝ DRAFT (formulár pripravený na Send)
-  // Asociácia .eml v Office = klasický Outlook → obíde mailto: handler ktorý unáša Edge.
-  const utf8Subject='=?utf-8?B?'+btoa(unescape(encodeURIComponent(subject)))+'?=';
-  const boundary='----=_NextPart_'+Date.now().toString(36);
-  // Base64 enkódovanie pre 8-bit safe transport (UTF-8 znaky ako á, č, š)
-  const b64=s=>{
-    const utf8=unescape(encodeURIComponent(s));
-    return btoa(utf8).match(/.{1,76}/g).join('\r\n');
-  };
-  const emlContent=[
-    'X-Unsent: 1',
-    'To: ',
-    'Subject: '+utf8Subject,
-    'MIME-Version: 1.0',
-    'Content-Type: multipart/alternative; boundary="'+boundary+'"',
-    '',
-    'This is a multi-part message in MIME format.',
-    '',
-    '--'+boundary,
-    'Content-Type: text/plain; charset=utf-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    b64(bodyTxt),
-    '',
-    '--'+boundary,
-    'Content-Type: text/html; charset=utf-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    b64(bodyHtml),
-    '',
-    '--'+boundary+'--',
-    ''
-  ].join('\r\n');
-
-  const blob=new Blob([emlContent],{type:'message/rfc822'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download='prerezervovanie_'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'.eml';
-  a.style.display='none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{ URL.revokeObjectURL(url); if(a.parentNode) a.parentNode.removeChild(a); },1500);
-  // Zaznamenaj do histórie pre každú objednávku v emaily
-  prChecked.forEach(id=>logHistoria(id,'email','Email prerezervácie odoslaný'));
-
-  // Označ email odoslaný + uloží do API
-  prChecked.forEach(id=>{
-    const oi=MOCK_OBJ.findIndex(x=>x.id_obj===id);
-    if(oi>=0&&!MOCK_OBJ[oi].pozn.includes('Email odoslaný')){
-      MOCK_OBJ[oi].pozn=(MOCK_OBJ[oi].pozn+' Email odoslaný').trim();
-      MOCK_OBJ[oi].zmeneny=now8();
-      patchObj(id, {poznamky: MOCK_OBJ[oi].pozn}, {silent: true});
-    }
-  });
-  prChecked.clear();
-  setTimeout(showPrerezerv,400);
-  toast('✓ Email s tabuľkou pripravený – kliknite na stiahnutý .eml súbor (otvorí sa Outlook s vyplnenou tabuľkou)');
-}
+// v36: generovanie mailov na pre-rezerváciu do ST zrušené (proces skončil)
 
 // ════════════════════════════════════════════════════════════
 // TAB 4: NENAPLÁNOVANÉ
@@ -6001,7 +5880,7 @@ function saveEdit(){
   } else if(farba==='zlta'){
     logHistoria(editCurrentId,'storno','Stornovanie');
   } else if(farba==='modra'){
-    logHistoria(editCurrentId,'prerezerv','Prerezervácia');
+    logHistoria(editCurrentId,'prerezerv','Aktivačná po LT');
   } else if(editOrigObj){
     if((editOrigObj.plan||'')!==(o.plan||'') && o.plan)
       logHistoria(editCurrentId,'zmena',`Preplánovanie: ${fmtD(editOrigObj.plan)||'–'} → ${fmtD(o.plan)}`);
@@ -7130,7 +7009,7 @@ function dailyBackupExport(opts={}){
           ['Po LT (otvorené):',    String(stats.po_lt)],
           ['Uzavretých (zelené):', String(stats.zelena)],
           ['Stornovaných (žlté):', String(stats.zlta)],
-          ['Pre-rezervovaných (modré):', String(stats.modra)],
+          ['Aktivačných po LT (modré):', String(stats.modra)],
           ['',''],
           ['Zdroj:', 'Browser-side export (MOCK_OBJ)'],
           ['Použitie:', 'V prípade výpadku premenuj na Zriaďovanie_2026.xlsm a otvor v Exceli'],
@@ -7308,7 +7187,7 @@ function casOknoChyba(od, doo){
   if(od && doo && _casMin(doo)<=_casMin(od)) return `⛔ Čas „Do" (${doo}) musí byť neskôr ako „Od" (${od}).`;
   return '';
 }
-const _DS_AKCIA={zapis:'Zápis',zmena:'Zmena',uzavretie:'Uzavretie',storno:'Storno',prerezerv:'Prerezervácia',email:'Email',poznamka:'Poznámka'};
+const _DS_AKCIA={zapis:'Zápis',zmena:'Zmena',uzavretie:'Uzavretie',storno:'Storno',prerezerv:'Aktivačná po LT',email:'Email',poznamka:'Poznámka'};
 const _DS_COLOR={zapis:'#dcfce7',zmena:'#f1f5f9',uzavretie:'#bbf7d0',storno:'#fef9c3',prerezerv:'#dbeafe',email:'#f3e8ff',poznamka:'#fff'};
 
 function showDennySumar(){
@@ -7811,7 +7690,7 @@ async function zobrazStatistiky(){
       '</div>'+
       '<div class="karta"><table style="width:100%"><thead><tr>'+
         '<th style="background:#e8eaf6;color:#283593;font-size:11px;font-weight:700;padding:6px 10px">Typ</th>'+
-        '<th style="background:#e8eaf6;color:#283593;font-size:11px;font-weight:700;padding:6px 10px;text-align:center">% Prerezervovaných</th>'+
+        '<th style="background:#e8eaf6;color:#283593;font-size:11px;font-weight:700;padding:6px 10px;text-align:center">% Aktivačných po LT</th>'+
         '<th style="background:#e8eaf6;color:#283593;font-size:11px;font-weight:700;padding:6px 10px;text-align:center">Priemerná doba realizácie</th>'+
       '</tr></thead><tbody>'+
         '<tr><td style="padding:7px 10px;font-size:13px"><strong>Všetky objednávky</strong></td>'+
